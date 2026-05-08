@@ -5,12 +5,14 @@ import Products from './pages/Products';
 import Customers from './pages/Customers';
 import Orders from './pages/Orders';
 import Sidebar from './components/Sidebar';
+import Notification from './pages/Notification';
 
 const PAGES = {
   dashboard: Dashboard,
   products:  Products,
   customers: Customers,
   orders:    Orders,
+  notifications: Notification,
 };
 
 export default function App() {
