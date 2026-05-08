@@ -1,449 +1,202 @@
-import React, { useState } from 'react';
-import {
-  Button,
-  Badge,
-  StatCard,
-  Table,
-  Pagination,
-} from '../components/ui';
+// src/pages/Dashboard.jsx
+import React from 'react';
+import Badge from '../components/Badge';
 
-const SAMPLE_ORDERS = [
+const STATS = [
   {
-    id: '#PK-1041',
-    customer: 'Rahul Menon',
-    item: 'Chicken Biriyani x2',
-    time: '2 min ago',
-    status: 'new',
-    amount: 480,
+    label: 'Revenue (7d)',
+    value: '₹1,42,350',
+    delta: '+12.4% vs last week',
+    positive: true,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <line x1="12" y1="1" x2="12" y2="23"/>
+        <path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+      </svg>
+    ),
   },
   {
-    id: '#PK-1040',
-    customer: 'Fathima Beevi',
-    item: 'Veg Thali x1',
-    time: '8 min ago',
-    status: 'preparing',
-    amount: 220,
+    label: 'Orders today',
+    value: '24',
+    delta: '+5 since morning',
+    positive: true,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <rect x="3" y="4" width="18" height="18" rx="2" ry="2"/>
+        <line x1="16" y1="2" x2="16" y2="6"/><line x1="8" y1="2" x2="8" y2="6"/>
+        <line x1="3" y1="10" x2="21" y2="10"/>
+      </svg>
+    ),
   },
   {
-    id: '#PK-1039',
-    customer: 'Arun Kumar',
-    item: 'Beef Fry x3, Parotta x6',
-    time: '15 min ago',
-    status: 'ready',
-    amount: 610,
+    label: 'Pending fulfilment',
+    value: '8',
+    delta: 'Action needed',
+    positive: false,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <circle cx="12" cy="12" r="10"/>
+        <polyline points="12 6 12 12 16 14"/>
+      </svg>
+    ),
   },
   {
-    id: '#PK-1038',
-    customer: 'Sneha Pillai',
-    item: 'Fish Curry + Rice x2',
-    time: '22 min ago',
-    status: 'delivered',
-    amount: 390,
-  },
-  {
-    id: '#PK-1037',
-    customer: 'Vivek Nair',
-    item: 'Shawarma x4',
-    time: '30 min ago',
-    status: 'delivered',
-    amount: 520,
-  },
-  {
-    id: '#PK-1036',
-    customer: 'Divya Krishnan',
-    item: 'Paneer Butter Masala x1',
-    time: '45 min ago',
-    status: 'delivered',
-    amount: 280,
+    label: 'Customers',
+    value: '1,284',
+    delta: '+38 this week',
+    positive: true,
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor"
+        strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/>
+        <path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+      </svg>
+    ),
   },
 ];
 
-const STATUS_FLOW = [
-  'new',
-  'preparing',
-  'ready',
-  'delivered',
+const WEEKLY_DATA = [
+  { day: 'Mon', value: 18400 },
+  { day: 'Tue', value: 24200 },
+  { day: 'Wed', value: 19800 },
+  { day: 'Thu', value: 31500 },
+  { day: 'Fri', value: 22100 },
+  { day: 'Sat', value: 15600 },
+  { day: 'Sun', value: 10750 },
 ];
 
-const STATUS_BADGE = {
-  new: 'warning',
-  preparing: 'info',
-  ready: 'success',
-  delivered: 'muted',
+const CHANNELS = [
+  { name: 'Shopify',     pct: 58 },
+  { name: 'WooCommerce', pct: 27 },
+  { name: 'Magento',     pct: 15 },
+];
+
+const RECENT_ORDERS = [
+  { id: 'ORD-90021', customer: 'Aarav Sharma',  total: '₹4,798', source: 'Shopify',     status: 'pending',   date: '2026-05-06' },
+  { id: 'ORD-90020', customer: 'Priya Patel',   total: '₹2,499', source: 'WooCommerce', status: 'shipped',   date: '2026-05-06' },
+  { id: 'ORD-90019', customer: 'Rohan Verma',   total: '₹9,495', source: 'Shopify',     status: 'delivered', date: '2026-05-05' },
+  { id: 'ORD-90018', customer: 'Neha Iyer',     total: '₹1,499', source: 'Magento',     status: 'cancelled', date: '2026-05-05' },
+  { id: 'ORD-90017', customer: 'Vikram Singh',  total: '₹6,597', source: 'Shopify',     status: 'pending',   date: '2026-05-04' },
+];
+
+const STATUS_VARIANT = {
+  pending:   'warning',
+  shipped:   'info',
+  delivered: 'success',
+  cancelled: 'danger',
 };
 
-const STATUS_LABEL = {
-  new: 'New',
-  preparing: 'Preparing',
-  ready: 'Ready',
-  delivered: 'Delivered',
-};
+const maxVal = Math.max(...WEEKLY_DATA.map(d => d.value));
 
-const NAV_ITEMS = [
-  { icon: '⊞', label: 'Dashboard', active: true },
-  { icon: '📋', label: 'Orders' },
-  { icon: '🍽️', label: 'Menu' },
-  { icon: '👤', label: 'Customers' },
-  { icon: '📊', label: 'Reports' },
-  { icon: '⚙️', label: 'Settings' },
-];
-
-export default function Dashboard({ user, onLogout }) {
-
-  const [orders, setOrders] = useState(SAMPLE_ORDERS);
-
-  const [filter, setFilter] = useState('all');
-
-  const [page, setPage] = useState(1);
-
-  const pageSize = 6;
-
-  const advance = (orderId) => {
-
-    setOrders(prev =>
-      prev.map(o => {
-
-        if (o.id !== orderId) {
-          return o;
-        }
-
-        const idx = STATUS_FLOW.indexOf(o.status);
-
-        return {
-          ...o,
-          status: STATUS_FLOW[
-            Math.min(idx + 1, STATUS_FLOW.length - 1)
-          ],
-        };
-      })
-    );
-  };
-
-  const filtered =
-    filter === 'all'
-      ? orders
-      : orders.filter(o => o.status === filter);
-
-  const totalPages = Math.max(
-    1,
-    Math.ceil(filtered.length / pageSize)
-  );
-
-  const paginated = filtered.slice(
-    (page - 1) * pageSize,
-    page * pageSize
-  );
-
-  const counts = {
-    new: orders.filter(o => o.status === 'new').length,
-    preparing: orders.filter(o => o.status === 'preparing').length,
-    ready: orders.filter(o => o.status === 'ready').length,
-    delivered: orders.filter(o => o.status === 'delivered').length,
-  };
-
-  const todayRevenue = orders
-    .filter(o => o.status === 'delivered')
-    .reduce((s, o) => s + o.amount, 0);
-
-  const columns = [
-    {
-      key: 'id',
-      label: 'Order ID',
-      render: v => (
-        <span className="order-id">
-          {v}
-        </span>
-      ),
-    },
-
-    {
-      key: 'customer',
-      label: 'Customer',
-    },
-
-    {
-      key: 'item',
-      label: 'Items',
-      render: v => (
-        <span className="order-item">
-          {v}
-        </span>
-      ),
-    },
-
-    {
-      key: 'time',
-      label: 'Time',
-      render: v => (
-        <span className="order-time">
-          {v}
-        </span>
-      ),
-    },
-
-    {
-      key: 'amount',
-      label: 'Amount',
-      align: 'right',
-      render: v => (
-        <strong>₹{v}</strong>
-      ),
-    },
-
-    {
-      key: 'status',
-      label: 'Status',
-      render: (_, row) => (
-        <Badge variant={STATUS_BADGE[row.status]}>
-          {STATUS_LABEL[row.status]}
-        </Badge>
-      ),
-    },
-
-    {
-      key: 'action',
-      label: '',
-      align: 'right',
-
-      render: (_, row) =>
-        row.status !== 'delivered' ? (
-          <Button
-            variant="outline"
-            size="xs"
-            onClick={() => advance(row.id)}
-          >
-            {
-              row.status === 'new'
-                ? 'Accept'
-                : row.status === 'preparing'
-                ? 'Mark Ready'
-                : 'Deliver'
-            }
-          </Button>
-        ) : null,
-    },
-  ];
-
-  const filterTabs = [
-    {
-      key: 'all',
-      label: 'All',
-      count: orders.length,
-    },
-
-    {
-      key: 'new',
-      label: 'New',
-      count: counts.new,
-    },
-
-    {
-      key: 'preparing',
-      label: 'Preparing',
-      count: counts.preparing,
-    },
-
-    {
-      key: 'ready',
-      label: 'Ready',
-      count: counts.ready,
-    },
-
-    {
-      key: 'delivered',
-      label: 'Delivered',
-      count: counts.delivered,
-    },
-  ];
-
+export default function Dashboard() {
   return (
-    <div className="dash-root">
+    <div className="page">
 
-      {/* Sidebar */}
-      <aside className="sidebar">
+      {/* ── Page header ── */}
+      <div className="page__header">
+        <h1 className="page__title">Dashboard</h1>
+        <p className="page__sub">Real-time view of orders flowing in from your storefronts.</p>
+      </div>
 
-        <div className="sidebar-brand">
-          <span className="brand-icon">⬡</span>
-
-          <span className="brand-name">
-            PEEKAY
-          </span>
-        </div>
-
-        <nav className="sidebar-nav">
-
-          {NAV_ITEMS.map(item => (
-            <div
-              key={item.label}
-              className={`nav-item ${
-                item.active ? 'active' : ''
-              }`}
-            >
-
-              <span className="nav-icon">
-                {item.icon}
-              </span>
-
-              <span className="nav-label">
-                {item.label}
-              </span>
-
+      {/* ── 4 Stat cards ── */}
+      <div className="dash-stat-grid">
+        {STATS.map(stat => (
+          <div className="dash-stat-card" key={stat.label}>
+            <div className="dash-stat-card__top">
+              <span className="dash-stat-card__label">{stat.label}</span>
+              <div className="dash-stat-card__icon">{stat.icon}</div>
             </div>
-          ))}
-
-        </nav>
-
-        <div
-          className="sidebar-user"
-          onClick={onLogout}
-        >
-
-          <div className="avatar">
-            {user.name[0]}
+            <div className="dash-stat-card__value">{stat.value}</div>
+            <div className={`dash-stat-card__delta${stat.positive ? ' dash-stat-card__delta--up' : ' dash-stat-card__delta--warn'}`}>
+              {stat.delta}
+            </div>
           </div>
+        ))}
+      </div>
 
-          <div className="user-info">
+      {/* ── Charts row ── */}
+      <div className="dash-charts-row">
 
-            <span className="user-name">
-              {user.name}
-            </span>
-
-            <span className="user-role">
-              {user.role}
-            </span>
-
+        {/* Revenue bar chart */}
+        <div className="dash-chart-card">
+          <div className="dash-chart-card__header">
+            <div className="dash-chart-card__title">Revenue this week</div>
+            <div className="dash-chart-card__sub">Daily totals across all channels</div>
           </div>
-
+          <div className="dash-bar-chart">
+            {WEEKLY_DATA.map(d => (
+              <div className="dash-bar-col" key={d.day}>
+                <div className="dash-bar-track">
+                  <div
+                    className="dash-bar-fill"
+                    style={{ height: `${(d.value / maxVal) * 100}%` }}
+                  />
+                </div>
+                <div className="dash-bar-label">{d.day}</div>
+              </div>
+            ))}
+          </div>
         </div>
-      </aside>
 
-      {/* Main */}
-      <div className="dash-main">
-
-        <header className="dash-header">
-
-          <div>
-            <h2 className="page-title">
-              Order Dashboard
-            </h2>
-
-            <p className="page-sub">
-              Live orders from your app
-            </p>
+        {/* Channel split */}
+        <div className="dash-channel-card">
+          <div className="dash-chart-card__title">Channel split</div>
+          <div className="dash-channel-list">
+            {CHANNELS.map(ch => (
+              <div className="dash-channel-item" key={ch.name}>
+                <div className="dash-channel-row">
+                  <span className="dash-channel-name">{ch.name}</span>
+                  <span className="dash-channel-pct">{ch.pct}%</span>
+                </div>
+                <div className="dash-channel-track">
+                  <div className="dash-channel-bar" style={{ width: `${ch.pct}%` }} />
+                </div>
+              </div>
+            ))}
           </div>
+        </div>
 
-          <div className="header-right">
+      </div>
 
-            <span className="live-pill">
-              <span className="live-dot" />
-              LIVE
-            </span>
-
-            <Button
-              variant="ghost"
-              size="sm"
-              onClick={onLogout}
-            >
-              Logout
-            </Button>
-
-          </div>
-
-        </header>
-
-        <div className="dash-content">
-
-          <div className="kpi-grid">
-
-            <StatCard
-              label="New Orders"
-              value={counts.new}
-              icon="🔔"
-              variant="warning"
-            />
-
-            <StatCard
-              label="Preparing"
-              value={counts.preparing}
-              icon="🍳"
-              variant="info"
-            />
-
-            <StatCard
-              label="Ready"
-              value={counts.ready}
-              icon="✅"
-              variant="success"
-            />
-
-            <StatCard
-              label="Revenue Today"
-              value={`₹${todayRevenue.toLocaleString('en-IN')}`}
-              icon="💰"
-              variant="primary"
-            />
-
-          </div>
-
-          <div className="orders-card">
-
-            <div className="orders-header">
-
-              <h3 className="orders-title">
-                Recent Orders
-              </h3>
-
-              <div className="filter-tabs">
-
-                {filterTabs.map(t => (
-                  <button
-                    key={t.key}
-                    className={`filter-tab ${
-                      filter === t.key ? 'active' : ''
-                    }`}
-                    onClick={() => {
-                      setFilter(t.key);
-                      setPage(1);
-                    }}
-                  >
-
-                    {t.label}
-
-                    <span className="tab-count">
-                      {t.count}
-                    </span>
-
-                  </button>
+      {/* ── Recent orders ── */}
+      <div className="dash-section">
+        <div className="dash-section__header">
+          <h2 className="dash-section__title">Recent orders</h2>
+        </div>
+        <div className="orders-card">
+          <table className="data-table">
+            <thead>
+              <tr>
+                {['ORDER', 'CUSTOMER', 'SOURCE', 'TOTAL', 'STATUS', 'DATE'].map(col => (
+                  <th key={col}>{col}</th>
                 ))}
-
-              </div>
-
-            </div>
-
-            <Table
-              columns={columns}
-              rows={paginated}
-              emptyMessage="No orders in this category."
-            />
-
-            {filtered.length > pageSize && (
-              <div className="pagination-wrap">
-
-                <Pagination
-                  currentPage={page}
-                  totalPages={totalPages}
-                  totalItems={filtered.length}
-                  pageSize={pageSize}
-                  onPageChange={setPage}
-                />
-
-              </div>
-            )}
-
-          </div>
-
+              </tr>
+            </thead>
+            <tbody>
+              {RECENT_ORDERS.map(order => (
+                <tr key={order.id}>
+                  <td style={{ fontWeight: 600 }}>{order.id}</td>
+                  <td>{order.customer}</td>
+                  <td>{order.source}</td>
+                  <td>{order.total}</td>
+                  <td>
+                    <Badge variant={STATUS_VARIANT[order.status] ?? 'default'}>
+                      {order.status.charAt(0).toUpperCase() + order.status.slice(1)}
+                    </Badge>
+                  </td>
+                  <td>{order.date}</td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
         </div>
       </div>
+
     </div>
   );
-} 
+}
