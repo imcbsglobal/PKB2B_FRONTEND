@@ -1,6 +1,6 @@
 // src/components/Sidebar.jsx
 import React from 'react';
-import pkLogo from '../assets/pk.png'; // ← put pk.png in src/assets/
+import pkLogo from '../assets/pk.png';
 
 const NAV_ITEMS = [
   {
@@ -22,12 +22,13 @@ const NAV_ITEMS = [
     ),
   },
   {
-    id: 'customers', label: 'Customers',
+    id: 'item', label: 'Item',
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
-        <circle cx="9" cy="7" r="4"/>
-        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
+        <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+        <line x1="12" y1="22" x2="12" y2="12"/>
+        <line x1="9"  y1="10.5" x2="12" y2="12"/>
+        <line x1="15" y1="10.5" x2="12" y2="12"/>
       </svg>
     ),
   },
@@ -36,6 +37,25 @@ const NAV_ITEMS = [
     icon: (
       <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
         <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'brands', label: 'Brand',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.59 13.41l-7.17 7.17a2 2 0 0 1-2.83 0L2 12V2h10l8.59 8.59a2 2 0 0 1 0 2.82z"/>
+        <line x1="7" y1="7" x2="7.01" y2="7"/>
+      </svg>
+    ),
+  },
+  {
+    id: 'customers', label: 'Customers',
+    icon: (
+      <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/>
+        <circle cx="9" cy="7" r="4"/>
+        <path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/>
       </svg>
     ),
   },
@@ -59,7 +79,6 @@ export default function Sidebar({ currentPage, onNavigate, onLogout }) {
           <img src={pkLogo} alt="Peekay logo" style={styles.logoImg} />
           <div>
             <div style={styles.wordmark}>PEEKAY</div>
-            <div style={styles.subtitle}>ORDER HUB</div>
           </div>
         </div>
       </div>
@@ -114,7 +133,7 @@ const styles = {
     background: '#1e2025',
     display: 'flex',
     flexDirection: 'column',
-    fontFamily: "'Barlow', sans-serif",
+    fontFamily: "'Space Grotesk', sans-serif",
   },
   header: {
     padding: '24px 20px 20px',
@@ -138,13 +157,6 @@ const styles = {
     letterSpacing: '2px',
     lineHeight: 1,
   },
-  subtitle: {
-    fontSize: '10px',
-    fontWeight: '600',
-    color: '#6b7280',
-    letterSpacing: '2.5px',
-    marginTop: '3px',
-  },
   nav: {
     flex: 1,
     padding: '16px 12px',
@@ -163,7 +175,7 @@ const styles = {
     color: '#9ca3af',
     fontSize: '15px',
     fontWeight: '600',
-    fontFamily: "'Barlow', sans-serif",
+    fontFamily: "'Space Grotesk', sans-serif",
     cursor: 'pointer',
     textAlign: 'left',
     width: '100%',
@@ -201,7 +213,7 @@ const styles = {
     color: '#9ca3af',
     fontSize: '14px',
     fontWeight: '600',
-    fontFamily: "'Barlow', sans-serif",
+    fontFamily: "'Space Grotesk', sans-serif",
     cursor: 'pointer',
     width: '100%',
     transition: 'color 0.15s',

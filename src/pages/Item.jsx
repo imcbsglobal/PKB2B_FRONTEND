@@ -1,81 +1,66 @@
-// src/pages/Orders.jsx
+// src/pages/Item.jsx
 import React, { useState } from 'react';
 import Table from '../components/Table';
-import Badge from '../components/Badge';
-import Button from '../components/Button';
 
-const ORDERS = [
-  { id: 'ORD-90021', customer: 'Aarav Sharma',  items: 2, total: '₹4,798',  source: 'Shopify',     status: 'pending',   date: '2026-05-06' },
-  { id: 'ORD-90020', customer: 'Priya Patel',   items: 1, total: '₹2,499',  source: 'WooCommerce', status: 'shipped',   date: '2026-05-06' },
-  { id: 'ORD-90019', customer: 'Rohan Verma',   items: 4, total: '₹9,495',  source: 'Shopify',     status: 'delivered', date: '2026-05-05' },
-  { id: 'ORD-90018', customer: 'Neha Iyer',     items: 1, total: '₹1,499',  source: 'Magento',     status: 'cancelled', date: '2026-05-05' },
-  { id: 'ORD-90017', customer: 'Vikram Singh',  items: 3, total: '₹6,597',  source: 'Shopify',     status: 'pending',   date: '2026-05-04' },
-  { id: 'ORD-90016', customer: 'Aarav Sharma',  items: 2, total: '₹3,598',  source: 'WooCommerce', status: 'delivered', date: '2026-05-03' },
+const ITEMS = [
+  { orderId: 'ORD-90021', date: '2026-05-06', customer: 'Aarav Sharma', itemname: 'Wireless Headphones', quantity: 2, amount: '₹4,798' },
+  { orderId: 'ORD-90020', date: '2026-05-06', customer: 'Priya Patel',   quantity: 1, amount: '₹2,499' },
+  { orderId: 'ORD-90019', date: '2026-05-05', customer: 'Rohan Verma',   quantity: 4, amount: '₹9,495' },
+  { orderId: 'ORD-90018', date: '2026-05-05', customer: 'Neha Iyer',     quantity: 1, amount: '₹1,499' },
+  { orderId: 'ORD-90017', date: '2026-05-04', customer: 'Vikram Singh',  quantity: 3, amount: '₹6,597' },
+  { orderId: 'ORD-90016', date: '2026-05-03', customer: 'Aarav Sharma',  quantity: 2, amount: '₹3,598' },
 ];
-
-const STATUS_VARIANT = {
-  pending:   'warning',
-  shipped:   'info',
-  delivered: 'success',
-  cancelled: 'danger',
-};
-
-const FILTERS = ['All', 'Pending', 'Shipped', 'Delivered', 'Cancelled'];
 
 const COLUMNS = [
-  { key: 'id',       label: 'ORDER'    },
-  { key: 'customer', label: 'CUSTOMER' },
-  { key: 'items',    label: 'ITEMS',   align: 'center' },
-  { key: 'total',    label: 'TOTAL'    },
-  { key: 'source',   label: 'SOURCE'   },
-  {
-    key: 'status',
-    label: 'STATUS',
-    render: (val) => (
-      <Badge variant={STATUS_VARIANT[val] ?? 'default'}>
-        {val.charAt(0).toUpperCase() + val.slice(1)}
-      </Badge>
-    ),
-  },
-  { key: 'date', label: 'DATE' },
+  { key: 'orderId',  label: 'ORDER ID'          },
+  { key: 'date',     label: 'DATE'              },
+  { key: 'customer', label: 'CUSTOMER'          },
+  { key: 'item name', label: 'ITEM NAME'          },
+  { key: 'quantity', label: 'QUANTITY', align: 'center' },
+  { key: 'amount',   label: 'AMOUNT'            },
 ];
 
-export default function Orders() {
-  const [filter, setFilter]     = useState('All');
-  const [search, setSearch]     = useState('');
+const FILTERS = ['All', 'Today', 'This Week'];
+
+export default function Item() {
+  const [search,   setSearch]   = useState('');
+  const [filter,   setFilter]   = useState('All');
   const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo]     = useState('');
+  const [dateTo,   setDateTo]   = useState('');
 
-  const filtered = ORDERS.filter(o => {
-    const matchesFilter = filter === 'All' || o.status === filter.toLowerCase();
+  const today     = new Date().toISOString().slice(0, 10);
+  const weekStart = new Date(Date.now() - 6 * 86400000).toISOString().slice(0, 10);
+
+  const filtered = ITEMS.filter(item => {
     const matchesSearch =
-      o.id.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer.toLowerCase().includes(search.toLowerCase());
-    const matchesFrom = !dateFrom || o.date >= dateFrom;
-    const matchesTo   = !dateTo   || o.date <= dateTo;
-    return matchesFilter && matchesSearch && matchesFrom && matchesTo;
-  });
+      item.orderId.toLowerCase().includes(search.toLowerCase()) ||
+      item.customer.toLowerCase().includes(search.toLowerCase());
 
-  const handleClearDates = () => {
-    setDateFrom('');
-    setDateTo('');
-  };
+    let matchesFilter = true;
+    if (filter === 'Today')     matchesFilter = item.date === today;
+    if (filter === 'This Week') matchesFilter = item.date >= weekStart;
+
+    const matchesFrom = !dateFrom || item.date >= dateFrom;
+    const matchesTo   = !dateTo   || item.date <= dateTo;
+
+    return matchesSearch && matchesFilter && matchesFrom && matchesTo;
+  });
 
   return (
     <div className="page">
 
-      {/* ── Page header ── */}
+      {/* Page header */}
       <div className="orders-page-header">
         <div>
-          <h1 className="page__title">Orders</h1>
-          <p className="page__sub">All orders synced from your connected storefronts.</p>
+          <h1 className="page__title">Items</h1>
+          <p className="page__sub">All order items synced from your connected storefronts.</p>
         </div>
       </div>
 
-      {/* ── Search + Filters + Table all inside one card ── */}
+      {/* Card: search + filters + date + table */}
       <div className="orders-card">
 
-        {/* Row 1: Search + filter pills */}
+        {/* Row 1: search + filter pills */}
         <div className="orders-toolbar">
           <div className="orders-search-wrap">
             <svg className="orders-search-icon" width="15" height="15" viewBox="0 0 24 24"
@@ -105,10 +90,10 @@ export default function Orders() {
           </div>
         </div>
 
-        {/* Row 2: Date range filters */}
+        {/* Row 2: date range — right aligned */}
         <div className="orders-date-toolbar" style={{ justifyContent: 'flex-end' }}>
           <div className="orders-date-group">
-            <label className="orders-date-label" htmlFor="date-from">From</label>
+            <label className="orders-date-label" htmlFor="item-date-from">From</label>
             <div className="orders-date-input-wrap">
               <svg className="orders-date-icon" width="14" height="14" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" strokeWidth="2"
@@ -119,7 +104,7 @@ export default function Orders() {
                 <line x1="3"  y1="10" x2="21" y2="10"/>
               </svg>
               <input
-                id="date-from"
+                id="item-date-from"
                 type="date"
                 className="orders-date-input"
                 value={dateFrom}
@@ -132,7 +117,7 @@ export default function Orders() {
           <span className="orders-date-sep">—</span>
 
           <div className="orders-date-group">
-            <label className="orders-date-label" htmlFor="date-to">To</label>
+            <label className="orders-date-label" htmlFor="item-date-to">To</label>
             <div className="orders-date-input-wrap">
               <svg className="orders-date-icon" width="14" height="14" viewBox="0 0 24 24"
                 fill="none" stroke="currentColor" strokeWidth="2"
@@ -143,7 +128,7 @@ export default function Orders() {
                 <line x1="3"  y1="10" x2="21" y2="10"/>
               </svg>
               <input
-                id="date-to"
+                id="item-date-to"
                 type="date"
                 className="orders-date-input"
                 value={dateTo}
@@ -154,7 +139,8 @@ export default function Orders() {
           </div>
 
           {(dateFrom || dateTo) && (
-            <button className="orders-date-clear" onClick={handleClearDates}>
+            <button className="orders-date-clear"
+              onClick={() => { setDateFrom(''); setDateTo(''); }}>
               Clear dates
             </button>
           )}
@@ -162,8 +148,8 @@ export default function Orders() {
 
         {/* Table */}
         <Table columns={COLUMNS} rows={filtered} />
-      </div>
 
+      </div>
     </div>
   );
 }

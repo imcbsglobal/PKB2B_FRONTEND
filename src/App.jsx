@@ -1,3 +1,4 @@
+// src/App.jsx
 import React, { useState } from 'react';
 import Login from './pages/Login';
 import Dashboard from './pages/Dashboard';
@@ -6,17 +7,21 @@ import Customers from './pages/Customers';
 import Orders from './pages/Orders';
 import Sidebar from './components/Sidebar';
 import Notification from './pages/Notification';
+import Item from './pages/Item';
+import Brand from './pages/Brand';
 
 const PAGES = {
-  dashboard: Dashboard,
-  products:  Products,
-  customers: Customers,
-  orders:    Orders,
+  dashboard:     Dashboard,
+  products:      Products,
+  customers:     Customers,
+  orders:        Orders,
   notifications: Notification,
+  item:          Item,
+  brands: Brand,
 };
 
 export default function App() {
-  const [user, setUser] = useState(null);
+  const [user, setUser]               = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
 
   if (!user) {
