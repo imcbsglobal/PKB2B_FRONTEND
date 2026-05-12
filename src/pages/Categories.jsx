@@ -1,5 +1,3 @@
-// src/pages/Brand.jsx
-
 import React, {
   useState,
   useEffect,
@@ -10,14 +8,14 @@ import Table from '../components/Table';
 import Input from '../components/Input';
 
 import {
-  brandAPI,
+  productAPI,
   productBatchAPI,
 } from '../Services/api';
 
-export default function Brand() {
+export default function Categories() {
 
   // ================= STATES =================
-  const [brands, setBrands] =
+  const [products, setProducts] =
     useState([]);
 
   const [search, setSearch] =
@@ -29,28 +27,28 @@ export default function Brand() {
   const [error, setError] =
     useState(null);
 
-  const [selectedBrand, setSelectedBrand] =
+  const [selectedCategory, setSelectedCategory] =
     useState(null);
 
   const [modalOpen, setModalOpen] =
     useState(false);
 
-  const [brandItems, setBrandItems] =
+  const [categoryItems, setCategoryItems] =
     useState([]);
 
   const [itemsLoading, setItemsLoading] =
     useState(false);
 
-  // ================= FETCH BRANDS =================
-  const fetchBrands = async () => {
+  // ================= FETCH PRODUCTS =================
+  const fetchProducts = async () => {
 
     try {
 
       setLoading(true);
 
-      // Fetch brands
-      const brandResponse =
-        await brandAPI.getAllBrands();
+      // Fetch categories
+      const categoryResponse =
+        await productAPI.getAllProducts();
 
       // Fetch items to count
       const itemsResponse =
@@ -58,43 +56,74 @@ export default function Brand() {
           .getAllItems();
 
       console.log(
-        'Items data:',
-        itemsResponse.data
+        'Categories:',
+        categoryResponse.data.map(
+          (c) => c.name
+        )
       );
 
-      // Count items by brand
+      console.log(
+        'Items sample:',
+        itemsResponse.data?.slice(0, 5)
+      );
+
+      // Count items by checking multiple fields
       const itemCounts = {};
       (itemsResponse.data || [])
         .forEach((item) => {
-          const brandName =
-            item.brand
+          // Try matching by product, category, name, or any relevant field
+          const productField =
+            item.product
               ?.toLowerCase()
               .trim();
-          itemCounts[brandName] =
-            (itemCounts[brandName] || 0) + 1;
+          const categoryField =
+            item.category
+              ?.toLowerCase()
+              .trim();
+          const nameField =
+            item.name
+              ?.toLowerCase()
+              .trim();
+
+          if (productField) {
+            itemCounts[productField] =
+              (itemCounts[productField] || 0) + 1;
+          }
+          if (categoryField) {
+            itemCounts[categoryField] =
+              (itemCounts[categoryField] || 0) + 1;
+          }
         });
 
       console.log(
-        'Item counts:',
+        'Item counts by field:',
         itemCounts
       );
 
-      // Add count to brands
-      const brandsWithId =
-        brandResponse.data.map(
-          (brand, index) => ({
-            ...brand,
-            id: brand.id || index,
-            itemCount:
-              itemCounts[
-                brand.name
-                  ?.toLowerCase()
-                  .trim()
-              ] || 0,
-          })
+      // Add count to categories
+      const productsWithId =
+        categoryResponse.data.map(
+          (product, index) => {
+            const categoryKey =
+              product.name
+                ?.toLowerCase()
+                .trim();
+            const count =
+              itemCounts[categoryKey] || 0;
+
+            console.log(
+              `Category "${product.name}" -> key "${categoryKey}" -> count ${count}`
+            );
+
+            return {
+              ...product,
+              id: product.id || index,
+              itemCount: count,
+            };
+          }
         );
 
-      setBrands(brandsWithId);
+      setProducts(productsWithId);
 
       setError(null);
 
@@ -103,10 +132,10 @@ export default function Brand() {
       console.error(err);
 
       setError(
-        'Failed to load brands'
+        'Failed to load categories'
       );
 
-      setBrands([]);
+      setProducts([]);
 
     } finally {
 
@@ -116,14 +145,14 @@ export default function Brand() {
 
   useEffect(() => {
 
-    fetchBrands();
+    fetchProducts();
 
   }, []);
 
-  // ================= OPEN BRAND MODAL =================
-  const handleBrandClick = async (brand) => {
+  // ================= OPEN CATEGORY MODAL =================
+  const handleCategoryClick = async (category) => {
 
-    setSelectedBrand(brand);
+    setSelectedCategory(category);
 
     setModalOpen(true);
 
@@ -135,21 +164,21 @@ export default function Brand() {
         await productBatchAPI
           .getAllItems();
 
-      // Filter items by brand name
+      // Filter items by product (category)
       const filtered =
         (response.data || []).filter(
           (item) =>
-            item.brand?.toLowerCase() ===
-            brand.name?.toLowerCase()
+            item.product?.toLowerCase() ===
+            category.name?.toLowerCase()
         );
 
-      setBrandItems(filtered);
+      setCategoryItems(filtered);
 
     } catch (err) {
 
       console.error(err);
 
-      setBrandItems([]);
+      setCategoryItems([]);
 
     } finally {
 
@@ -163,23 +192,23 @@ export default function Brand() {
 
       try {
 
-        // OPTIMISTIC UPDATE
-        setBrands((prev) =>
-          prev.map((brand) =>
+        // UPDATE UI INSTANTLY
+        setProducts((prev) =>
+          prev.map((product) =>
 
-            brand.id === row.id
+            product.id === row.id
               ? {
-                  ...brand,
+                  ...product,
                   is_favorite:
-                    !brand.is_favorite,
+                    !product.is_favorite,
                 }
-              : brand
+              : product
           )
         );
 
-        // API CALL
-        await brandAPI
-          .toggleBrandFavorite(
+        // CALL API
+        await productAPI
+          .toggleProductFavorite(
             row.name
           );
 
@@ -188,7 +217,7 @@ export default function Brand() {
         console.error(error);
 
         // REFRESH IF FAILED
-        fetchBrands();
+        fetchProducts();
       }
 
     }, []);
@@ -196,11 +225,11 @@ export default function Brand() {
   // ================= TABLE COLUMNS =================
   const COLUMNS = [
 
-    // LOGO
+    // IMAGE
     {
-      key: 'logo',
+      key: 'image',
 
-      label: 'LOGO',
+      label: 'IMAGE',
 
       render: (_, row) => (
 
@@ -214,10 +243,10 @@ export default function Brand() {
           }}
         >
 
-          {row.logo ? (
+          {row.url ? (
 
             <img
-              src={row.logo}
+              src={row.url}
               alt={row.name}
               style={{
                 width: '100%',
@@ -237,10 +266,9 @@ export default function Brand() {
                 height: '100%',
                 fontSize: '12px',
                 color: '#999',
-                fontWeight: '600',
               }}
             >
-              {row.name?.charAt(0)}
+              No Image
             </div>
 
           )}
@@ -252,11 +280,11 @@ export default function Brand() {
     // NAME
     {
       key: 'name',
-      label: 'BRAND',
+      label: 'NAME',
       render: (_, row) => (
         <button
           onClick={() =>
-            handleBrandClick(row)
+            handleCategoryClick(row)
           }
           style={{
             background: 'none',
@@ -332,9 +360,9 @@ export default function Brand() {
 
   // ================= SEARCH =================
   const filtered =
-    brands.filter((b) =>
+    products.filter((p) =>
 
-      b.name
+      p.name
         ?.toLowerCase()
         .includes(
           search.toLowerCase()
@@ -351,7 +379,7 @@ export default function Brand() {
         <div className="page__header">
 
           <h1 className="page__title">
-            Brands
+            Categories
           </h1>
 
         </div>
@@ -362,7 +390,7 @@ export default function Brand() {
             textAlign: 'center',
           }}
         >
-          Loading brands...
+          Loading categories...
         </p>
 
       </div>
@@ -379,7 +407,7 @@ export default function Brand() {
         <div className="page__header">
 
           <h1 className="page__title">
-            Brands
+            Categories
           </h1>
 
         </div>
@@ -409,13 +437,13 @@ export default function Brand() {
         <div>
 
           <h1 className="page__title">
-            Brands
+            Categories
           </h1>
 
           <p className="page__sub">
             {filtered.length}
             {' '}
-            brands found
+            categories found
           </p>
 
         </div>
@@ -427,7 +455,7 @@ export default function Brand() {
 
         <Input
           className="toolbar__search"
-          placeholder="Search brands..."
+          placeholder="Search categories..."
           value={search}
           onChange={(e) =>
             setSearch(e.target.value)
@@ -489,7 +517,7 @@ export default function Brand() {
                   fontWeight: '700',
                 }}
               >
-                {selectedBrand?.name}
+                {selectedCategory?.name}
                 {' '}
                 Items
               </h2>
@@ -518,7 +546,7 @@ export default function Brand() {
                 color: '#666',
               }}
             >
-              {brandItems.length}
+              {categoryItems.length}
               {' '}
               items found
             </p>
@@ -535,7 +563,7 @@ export default function Brand() {
                 Loading items...
               </div>
 
-            ) : brandItems.length === 0 ? (
+            ) : categoryItems.length === 0 ? (
 
               <div
                 style={{
@@ -546,7 +574,7 @@ export default function Brand() {
               >
                 No items found for
                 {' '}
-                {selectedBrand?.name}
+                {selectedCategory?.name}
               </div>
 
             ) : (
@@ -628,6 +656,11 @@ export default function Brand() {
                   {
                     key: 'name',
                     label: 'NAME',
+                  },
+
+                  {
+                    key: 'brand',
+                    label: 'BRAND',
                   },
 
                   {
@@ -726,7 +759,7 @@ export default function Brand() {
                     },
                   },
                 ]}
-                rows={brandItems}
+                rows={categoryItems}
               />
 
             )}

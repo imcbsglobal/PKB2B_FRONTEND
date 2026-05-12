@@ -1,6 +1,7 @@
 import React, { useState } from 'react';
 import Button from '../components/Button';
 import pkLogo from '../assets/pk.png';
+import { authAPI } from '../Services/api';
 
 const EyeIcon = () => (
   <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
@@ -24,25 +25,49 @@ export default function Login({ onLogin }) {
   const [showPass, setShowPass] = useState(false);
   const [remember, setRemember] = useState(false);
 
-  const validate = () => {
-    const e = {};
-    if (!form.username.trim()) e.username = 'Username is required';
-    if (!form.password)        e.password = 'Password is required';
-    return e;
-  };
-
   const handleSubmit = async (evt) => {
     evt.preventDefault();
-    const errs = validate();
-    if (Object.keys(errs).length) { setErrors(errs); return; }
-    setErrors({});
+    
+    if (!form.username.trim() || !form.password) {
+      setErrors({ auth: 'Username and password required' });
+      return;
+    }
+
     setLoading(true);
-    await new Promise(r => setTimeout(r, 800));
-    setLoading(false);
-    if (form.username === 'admin' && form.password === 'admin123') {
-      onLogin({ name: 'Admin', role: 'Order Manager' });
-    } else {
-      setErrors({ auth: 'Invalid credentials. Try admin / admin123' });
+    setErrors({});
+
+    try {
+      const response = await authAPI.login(form.username, form.password);
+      const data = response.data;
+
+      if (!data.access || !data.refresh) {
+        throw new Error('Missing tokens in response');
+      }
+
+      localStorage.setItem('access_token', data.access);
+      localStorage.setItem('refresh_token', data.refresh);
+      localStorage.setItem('user_role', data.user.role);
+      localStorage.setItem('user_id', data.user.id);
+
+      setLoading(false);
+      onLogin({ name: data.user.id, role: data.user.role });
+    } catch (err) {
+      setLoading(false);
+      let errorMsg = 'Login failed';
+      
+      if (err.response?.status === 500) {
+        errorMsg = 'Server error. Please check backend.';
+      } else if (err.response?.status === 401) {
+        errorMsg = 'Invalid credentials';
+      } else if (err.response?.data?.detail) {
+        errorMsg = err.response.data.detail;
+      } else if (err.response?.data?.error) {
+        errorMsg = err.response.data.error;
+      } else if (err.message) {
+        errorMsg = err.message;
+      }
+      
+      setErrors({ auth: errorMsg });
     }
   };
 
@@ -229,7 +254,7 @@ export default function Login({ onLogin }) {
           </div>
 
           <p className="login-hint">
-            Demo: <code>admin</code> / <code>admin123</code>
+            Enter your credentials to login
           </p>
 
         </form>
