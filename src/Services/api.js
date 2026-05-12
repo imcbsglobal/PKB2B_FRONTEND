@@ -150,6 +150,12 @@ export const orderAPI = {
   getOrders: () =>
     apiClient.get('/orders/'),
 
+  createOrder: (orderData) =>
+    apiClient.post(
+      '/order/create/',
+      orderData
+    ),
+
   acceptOrder:
     (orderId) =>
 
@@ -176,13 +182,7 @@ export const bannerAPI = {
 
       apiClient.post(
         '/banners/upload/',
-        formData,
-        {
-          headers: {
-            'Content-Type':
-              'multipart/form-data',
-          },
-        }
+        formData
       ),
 
   deleteBanner: (id) =>

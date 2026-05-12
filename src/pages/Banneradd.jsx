@@ -100,13 +100,24 @@ export default function Banneradd({
 
       const data = new FormData();
 
-      data.append('title', formData.title);
-      data.append('subtitle', formData.subtitle);
-      data.append('url', formData.url);
+      data.append('title', formData.title.trim());
+      
+      if (formData.subtitle.trim()) {
+        data.append('subtitle', formData.subtitle.trim());
+      }
+      
+      if (formData.url.trim()) {
+        data.append('url', formData.url.trim());
+      }
 
       if (formData.image) {
 
         data.append('image', formData.image);
+      }
+
+      if (bannerToEdit) {
+
+        data.append('id', bannerToEdit.id);
       }
 
       await bannerAPI.uploadBanner(data);
@@ -115,9 +126,15 @@ export default function Banneradd({
 
     } catch (error) {
 
-      console.error('Upload Banner Error:', error);
+      console.error('Upload Banner Error:', {
+        status: error.response?.status,
+        data: error.response?.data,
+        message: error.message,
+      });
 
-      setError('Failed to upload banner');
+      const errorMsg = error.response?.data?.detail || error.response?.data?.message || 'Failed to upload banner';
+
+      setError(errorMsg);
 
     } finally {
 

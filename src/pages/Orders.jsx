@@ -4,6 +4,7 @@ import React, { useState, useEffect } from 'react';
 import Table from '../components/Table';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
+import OrderModal from '../components/OrderModal';
 import { orderAPI } from '../Services/api';
 
 const STATUS_VARIANT = {
@@ -20,6 +21,7 @@ export default function Orders() {
   // ================= STATES =================
   const [orders, setOrders] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [showOrderModal, setShowOrderModal] = useState(false);
 
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
@@ -235,6 +237,13 @@ export default function Orders() {
 
         </div>
 
+        <Button
+          variant="primary"
+          onClick={() => setShowOrderModal(true)}
+        >
+          + Create Order
+        </Button>
+
       </div>
 
       {/* Card */}
@@ -378,6 +387,14 @@ export default function Orders() {
         />
 
       </div>
+
+      {/* Order Modal */}
+      {showOrderModal && (
+        <OrderModal
+          onClose={() => setShowOrderModal(false)}
+          onOrderCreated={fetchOrders}
+        />
+      )}
 
     </div>
   );
