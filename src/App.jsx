@@ -1,20 +1,22 @@
 // src/App.jsx
-import React, { useState, useEffect } from 'react';
-import Login from './pages/Login';
-import Dashboard from './pages/Dashboard';
-import Categories from './pages/Categories';
-import FavoriteCategories from './pages/FavoriteCategories';
-
-import Customers from './pages/Customers';
-import Orders from './pages/Orders';
+import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
-import Notification from './pages/Notification';
-import Item from './pages/Item';
-import Brand from './pages/Brand';
-import Inventory from './pages/Inventory';
-import Banner from './pages/Banner';
-import Banneradd from './pages/Banneradd';
+import Toast from './components/Toast';
+import { useToast } from './hooks/useToast';
 import { authAPI } from './Services/api';
+
+const Dashboard          = lazy(() => import('./pages/Dashboard'));
+const Categories         = lazy(() => import('./pages/Categories'));
+const FavoriteCategories = lazy(() => import('./pages/FavoriteCategories'));
+const Customers          = lazy(() => import('./pages/Customers'));
+const Orders             = lazy(() => import('./pages/Orders'));
+const Notification       = lazy(() => import('./pages/Notification'));
+const Item               = lazy(() => import('./pages/Item'));
+const Brand              = lazy(() => import('./pages/Brand'));
+const Inventory          = lazy(() => import('./pages/Inventory'));
+const Banner             = lazy(() => import('./pages/Banner'));
+const Banneradd          = lazy(() => import('./pages/Banneradd'));
+const Login              = lazy(() => import('./pages/Login'));
 
 const PAGES = {
   dashboard:           Dashboard,
@@ -35,18 +37,34 @@ export default function App() {
   const [currentPage, setCurrentPage] = useState('dashboard');
   const [bannerToEdit, setBannerToEdit] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
+  const { toasts, showToast, hideToast } = useToast();
 
-  // Restore user session from localStorage on app startup
+  // Restore user session and current page from localStorage on app startup
   useEffect(() => {
     const userId = localStorage.getItem('user_id');
     const userRole = localStorage.getItem('user_role');
     if (userId && userRole) {
       setUser({ name: userId, role: userRole });
+      
+      // Restore the current page from localStorage (only if it was previously saved)
+      // On fresh login, start with dashboard
+      const savedPage = localStorage.getItem('current_page');
+      if (savedPage && PAGES[savedPage]) {
+        setCurrentPage(savedPage);
+      } else {
+        // Default to dashboard on fresh login
+        setCurrentPage('dashboard');
+        localStorage.setItem('current_page', 'dashboard');
+      }
     }
   }, []);
 
   if (!user) {
-    return <Login onLogin={setUser} />;
+    return (
+      <Suspense fallback={null}>
+        <Login onLogin={setUser} />
+      </Suspense>
+    );
   }
 
   const PageComponent = PAGES[currentPage] ?? Dashboard;
@@ -54,6 +72,8 @@ export default function App() {
   const handleNavigate = (page, banner = null) => {
     setCurrentPage(page);
     setBannerToEdit(banner || null);
+    // Save current page to localStorage for persistence on refresh
+    localStorage.setItem('current_page', page);
   };
 
   const handleBannerSaved = () => {
@@ -75,14 +95,20 @@ export default function App() {
         onLogout={handleLogout}
       />
       <main className="main-content">
-        <PageComponent
-          onNavigate={handleNavigate}
-          onBannerAdded={handleBannerSaved}
-          onCancel={() => handleNavigate('banner')}
-          bannerToEdit={bannerToEdit}
-          refreshTrigger={refreshTrigger}
-        />
+        <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading...</div>}>
+          <PageComponent
+            onNavigate={handleNavigate}
+            onBannerAdded={handleBannerSaved}
+            onCancel={() => handleNavigate('banner')}
+            bannerToEdit={bannerToEdit}
+            refreshTrigger={refreshTrigger}
+            showToast={showToast}
+          />
+        </Suspense>
       </main>
+      {toasts.map(t => (
+        <Toast key={t.id} message={t.message} type={t.type} duration={t.duration} onClose={() => hideToast(t.id)} />
+      ))}
     </div>
   );
 }

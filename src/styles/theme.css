@@ -3,7 +3,7 @@
    Import order: theme.css → components.css → layout.css
    ═══════════════════════════════════════════════════════════ */
 
-@import url('https://fonts.googleapis.com/css2?family=Space+Grotesk:wght@300;400;500;600;700&display=swap');
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap');
 
 /* ── Reset ─────────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,19 +14,19 @@ button, input, select, textarea { font: inherit; }
 /* ── CSS Custom Properties (OKLCH) ─────────────────────── */
 :root {
   /* --- Palette --- */
-  --color-bg:             oklch(0.985 0.004 90);   /* warm off-white canvas      */
+  --color-bg:             oklch(1 0 0);            /* pure white canvas          */
   --color-fg:             oklch(0.24  0.012 250);  /* deep slate ink             */
   --color-card:           oklch(1     0     0);    /* pure white card            */
   --color-primary:        oklch(0.82  0.16  85);   /* signal yellow — Peekay CTA */
   --color-primary-hover:  oklch(0.75  0.16  85);   /* darker yellow on hover     */
   --color-primary-ring:   oklch(0.82  0.16  85 / 0.30);
   --color-accent:         oklch(0.93  0.10  90);   /* soft yellow tint           */
-  --color-secondary:      oklch(0.96  0.008 90);   /* warm neutral surface       */
+  --color-secondary:      oklch(1     0     0);    /* pure white surface         */
   --color-secondary-fg:   oklch(0.955 0.006 90);
-  --color-muted:          oklch(0.96  0.008 90);
+  --color-muted:          oklch(1     0     0);    /* pure white muted surface   */
   --color-muted-fg:       oklch(0.50  0.012 250);
-  --color-border:         oklch(0.91  0.008 90);
-  --color-input:          oklch(0.93  0.008 90);
+  --color-border:         oklch(0.92  0.008 90);   /* light gray border          */
+  --color-input:          oklch(0.98  0.008 90);   /* off-white input background */
   --color-destructive:    oklch(0.58  0.22  25);   /* red                        */
 
   /* Sidebar shell (dark-on-light contrast panel) */
@@ -47,7 +47,7 @@ button, input, select, textarea { font: inherit; }
   --color-badge-def-fg:   var(--color-muted-fg);
 
   /* --- Typography --- */
-  --font-display: 'Space Grotesk', system-ui, sans-serif;
+  --font-display: 'Manrope', system-ui, sans-serif;
   --font-mono:    'Courier New', monospace;
 
   --text-xs:   0.75rem;   /* 12px */
@@ -101,7 +101,7 @@ button, input, select, textarea { font: inherit; }
 
 /* ── Base ───────────────────────────────────────────────── */
 body {
-  font-family: var(--font-display);
+  font-family: 'Inter', sans-serif;
   font-size: var(--text-base);
   font-weight: var(--weight-normal);
   line-height: 1.6;
@@ -109,6 +109,12 @@ body {
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+}
+
+h1,
+h2,
+h3 {
+  font-family: 'Poppins', sans-serif;
 }
 
 /* Focus ring — accessible, on-brand */

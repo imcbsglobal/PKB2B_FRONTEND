@@ -1,178 +1,125 @@
 import React, { useState } from 'react';
-import Input from './Input';
-import Button from './Button';
+import Button from '../components/Button';
 import { orderAPI } from '../Services/api';
 
-export default function OrderModal({ onClose, onOrderCreated }) {
-  // ================= STATES =================
-  const [loading, setLoading] = useState(false);
-  const [error, setError] = useState('');
-  const [formData, setFormData] = useState({
-    customer: '',
-    items: '',
-    total: '',
-    source: '',
-  });
+export default function OrderModal({
+  onClose,
+  onOrderCreated,
+}) {
 
-  // ================= HANDLE CHANGE =================
-  const handleChange = (e) => {
-    const { name, value } = e.target;
-    setFormData((prev) => ({
-      ...prev,
-      [name]: value,
-    }));
-  };
+  const [customer, setCustomer] =
+    useState('');
 
-  // ================= HANDLE SUBMIT =================
+  const [items, setItems] =
+    useState('');
+
+  const [total, setTotal] =
+    useState('');
+
+  const [loading, setLoading] =
+    useState(false);
+
   const handleSubmit = async (e) => {
+
     e.preventDefault();
-    setError('');
-
-    // Validation
-    if (!formData.customer || !formData.items || !formData.total || !formData.source) {
-      setError('All fields are required');
-      return;
-    }
-
-    // Validate items is positive
-    const itemsNum = parseInt(formData.items);
-    if (itemsNum <= 0) {
-      setError('Number of items must be greater than 0');
-      return;
-    }
-
-    // Validate total is positive
-    const totalNum = parseFloat(formData.total);
-    if (totalNum <= 0) {
-      setError('Total amount must be greater than 0');
-      return;
-    }
 
     try {
+
       setLoading(true);
 
-      const orderPayload = {
-        customer: formData.customer,
-        items: itemsNum,
-        total: totalNum,
-        source: formData.source,
+      const orderData = {
+
+        customer,
+
+        items,
+
+        total,
+
       };
 
-      const response = await orderAPI.createOrder(orderPayload);
+      await orderAPI.createOrder(
+        orderData
+      );
 
-      console.log('Order Created:', response.data);
+      onOrderCreated?.();
 
-      // Call the callback to refresh orders
-      onOrderCreated();
+      onClose?.();
 
-      // Close modal
-      onClose();
+    } catch (error) {
 
-    } catch (err) {
-      console.error('Create Order Error:', err);
-      console.error('Error Response:', err.response?.data);
-      
-      // Show detailed error message
-      const errorMsg = 
-        err.response?.data?.message || 
-        err.response?.data?.error ||
-        (typeof err.response?.data === 'object' ? JSON.stringify(err.response?.data) : null) ||
-        'Failed to create order. Please try again.';
-      
-      setError(errorMsg);
+      console.error(
+        'Create Order Error:',
+        error
+      );
+
     } finally {
+
       setLoading(false);
     }
   };
 
   return (
-    <div className="modal-overlay" onClick={onClose}>
-      <div className="modal-content" onClick={(e) => e.stopPropagation()}>
-        {/* Header */}
-        <div className="modal-header">
-          <h2>Create New Order</h2>
-          <button
-            className="modal-close"
-            onClick={onClose}
-            disabled={loading}
-          >
-            ✕
-          </button>
-        </div>
 
-        {/* Body */}
-        <form onSubmit={handleSubmit} className="modal-body">
-          {error && (
-            <div className="form-error">
-              {error}
-            </div>
-          )}
+    <div className="modal">
 
-          <Input
-            label="Customer Name"
-            name="customer"
-            value={formData.customer}
-            onChange={handleChange}
-            placeholder="Enter customer name"
-            disabled={loading}
-            required
-          />
+      <form onSubmit={handleSubmit}>
 
-          <Input
-            label="Number of Items"
-            name="items"
-            type="number"
-            min="1"
-            value={formData.items}
-            onChange={handleChange}
-            placeholder="Enter number of items"
-            disabled={loading}
-            required
-          />
+        <h2>Create Order</h2>
 
-          <Input
-            label="Total Amount"
-            name="total"
-            type="number"
-            step="0.01"
-            min="0.01"
-            value={formData.total}
-            onChange={handleChange}
-            placeholder="Enter total amount"
-            disabled={loading}
-            required
-          />
+        <input
+          type="text"
+          placeholder="Customer Name"
+          value={customer}
+          onChange={(e) =>
+            setCustomer(e.target.value)
+          }
+        />
 
-          <Input
-            label="Source"
-            name="source"
-            value={formData.source}
-            onChange={handleChange}
-            placeholder="e.g., Online, Offline, Phone"
-            disabled={loading}
-            required
-          />
-        </form>
+        <input
+          type="text"
+          placeholder="Items"
+          value={items}
+          onChange={(e) =>
+            setItems(e.target.value)
+          }
+        />
 
-        {/* Footer */}
-        <div className="modal-footer">
+        <input
+          type="number"
+          placeholder="Total"
+          value={total}
+          onChange={(e) =>
+            setTotal(e.target.value)
+          }
+        />
+
+        <div
+          style={{
+            display: 'flex',
+            gap: '10px',
+            marginTop: '20px',
+          }}
+        >
+
           <Button
+            type="submit"
+            loading={loading}
+          >
+            Create Order
+          </Button>
+
+          <Button
+            type="button"
             variant="outline"
             onClick={onClose}
-            disabled={loading}
           >
             Cancel
           </Button>
 
-          <Button
-            variant="primary"
-            onClick={handleSubmit}
-            disabled={loading}
-          >
-            {loading ? 'Creating...' : 'Create Order'}
-          </Button>
         </div>
-      </div>
+
+      </form>
+
     </div>
   );
 }

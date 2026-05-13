@@ -124,6 +124,16 @@ export const productBatchAPI = {
     ),
 };
 
+// ================= CATEGORIES =================
+export const categoryAPI = {
+
+  // GET ALL CATEGORY ITEMS
+  getCategories: () =>
+    apiClient.get(
+      '/accservicemaster/'
+    ),
+};
+
 // ================= BRANDS =================
 export const brandAPI = {
 
@@ -147,44 +157,53 @@ export const brandAPI = {
 // ================= ORDERS =================
 export const orderAPI = {
 
+  // GET ALL ORDERS
   getOrders: () =>
     apiClient.get('/orders/'),
 
-  createOrder: (orderData) =>
+  // ACCEPT ORDER
+  acceptOrder: (orderId) =>
     apiClient.post(
-      '/order/create/',
-      orderData
+      `/order/${orderId}/accept/`
     ),
 
-  acceptOrder:
-    (orderId) =>
+  // COMPLETE ORDER
+  completeOrder: (orderId) =>
+    apiClient.post(
+      `/order/${orderId}/complete/`
+    ),
+};
 
-      apiClient.post(
-        `/order/${orderId}/accept/`
-      ),
+// ================= CUSTOMERS =================
+export const customerAPI = {
 
-  completeOrder:
-    (orderId) =>
-
-      apiClient.post(
-        `/order/${orderId}/complete/`
-      ),
+  // GET ALL CUSTOMERS
+  getCustomers: () =>
+    apiClient.get('/acc_master/'),
 };
 
 // ================= BANNERS =================
 export const bannerAPI = {
 
+  // GET ALL BANNERS
   getBanners: () =>
     apiClient.get('/banners/'),
 
-  uploadBanner:
-    (formData) =>
+  // UPLOAD BANNER
+  uploadBanner: (formData) =>
 
-      apiClient.post(
-        '/banners/upload/',
-        formData
-      ),
+    apiClient.post(
+      '/banners/upload/',
+      formData,
+      {
+        headers: {
+          'Content-Type':
+            'multipart/form-data',
+        },
+      }
+    ),
 
+  // DELETE BANNER
   deleteBanner: (id) =>
     apiClient.delete(
       `/banners/${id}/`

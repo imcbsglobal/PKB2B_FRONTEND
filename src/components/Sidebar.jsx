@@ -1,6 +1,7 @@
 // src/components/Sidebar.jsx
 import React from 'react';
 import pkLogo from '../assets/pk.png';
+import DarkModeToggle from './DarkModeToggle';
 
 const NAV_ITEMS = [
   {
@@ -151,6 +152,9 @@ export default function Sidebar({ currentPage, onNavigate, onLogout }) {
 
       {/* Footer */}
       <div style={styles.footer}>
+        <div style={{ marginBottom: '12px' }}>
+          <DarkModeToggle />
+        </div>
         <button
           style={styles.logoutBtn}
           onClick={onLogout}

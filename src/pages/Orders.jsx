@@ -1,119 +1,131 @@
-// src/pages/Orders.jsx
+import React, {
+  useState,
+} from 'react';
 
-import React, { useState, useEffect } from 'react';
 import Table from '../components/Table';
 import Badge from '../components/Badge';
 import Button from '../components/Button';
-import OrderModal from '../components/OrderModal';
+import Pagination from '../components/Pagination';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
+import Spinner from '../components/Spinner';
+
 import { orderAPI } from '../Services/api';
+import { usePagination } from '../hooks/usePagination';
+import { useFetchData } from '../hooks/useFetchData';
+import { dataCache } from '../utils/cache';
 
 const STATUS_VARIANT = {
   pending: 'warning',
-  shipped: 'info',
-  delivered: 'success',
-  cancelled: 'danger',
+  completed: 'success',
+  accepted: 'info',
 };
 
-const FILTERS = ['All', 'Pending', 'Shipped', 'Delivered', 'Cancelled'];
+const FILTERS = [
+  'All',
+  'Pending',
+  'Completed',
+];
 
-export default function Orders() {
+export default function Orders({ showToast }) {
 
   // ================= STATES =================
-  const [orders, setOrders] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [showOrderModal, setShowOrderModal] = useState(false);
-
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [actionLoading, setActionLoading] = useState(null);
 
-  // ================= FETCH ORDERS =================
-  useEffect(() => {
-    fetchOrders();
-  }, []);
+  // ================= FETCH ORDERS WITH CACHE =================
+  const [refreshKey, setRefreshKey] = useState(0);
+  const ordersResult = useFetchData(
+    'orders',
+    () => orderAPI.getOrders(),
+    [refreshKey]
+  );
+  const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
+  const loading = ordersResult.loading;
 
-  const fetchOrders = async () => {
-
-    try {
-
-      setLoading(true);
-
-      const response = await orderAPI.getOrders();
-
-      console.log('Orders:', response.data);
-
-      setOrders(response.data || []);
-
-    } catch (error) {
-
-      console.error('Orders API Error:', error);
-
-    } finally {
-
-      setLoading(false);
-
-    }
+  const refreshOrders = () => {
+    dataCache.clear('orders');
+    setRefreshKey(k => k + 1);
   };
 
   // ================= ACCEPT ORDER =================
-  const acceptOrder = async (id) => {
-
+  const acceptOrder = async (orderId) => {
+    setActionLoading(orderId);
     try {
-
-      await orderAPI.acceptOrder(id);
-
-      fetchOrders();
-
+      await orderAPI.acceptOrder(orderId);
+      refreshOrders();
+      showToast?.('Order accepted successfully!', 'success');
     } catch (error) {
-
       console.error('Accept Order Error:', error);
-
+      showToast?.('Failed to accept order', 'error');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   // ================= COMPLETE ORDER =================
-  const completeOrder = async (id) => {
-
+  const completeOrder = async (orderId) => {
+    setActionLoading(orderId);
     try {
-
-      await orderAPI.completeOrder(id);
-
-      fetchOrders();
-
+      await orderAPI.completeOrder(orderId);
+      refreshOrders();
+      showToast?.('Order completed successfully!', 'success');
     } catch (error) {
-
       console.error('Complete Order Error:', error);
-
+      showToast?.('Failed to complete order', 'error');
+    } finally {
+      setActionLoading(null);
     }
   };
 
   // ================= TABLE COLUMNS =================
   const COLUMNS = [
+
     {
-      key: 'id',
-      label: 'ORDER',
+      key: 'order_id',
+      label: 'ORDER ID',
     },
 
     {
-      key: 'customer',
+      key: 'customer_name',
       label: 'CUSTOMER',
     },
 
     {
-      key: 'items',
-      label: 'ITEMS',
-      align: 'center',
+      key: 'customer_code',
+      label: 'CUSTOMER CODE',
     },
 
     {
-      key: 'total',
-      label: 'TOTAL',
+      key: 'phone_number',
+      label: 'PHONE',
     },
 
     {
-      key: 'source',
-      label: 'SOURCE',
+      key: 'item_code',
+      label: 'ITEM CODE',
+    },
+
+    {
+      key: 'item_name',
+      label: 'ITEM NAME',
+    },
+
+    {
+      key: 'barcode',
+      label: 'BARCODE',
+    },
+
+    {
+      key: 'quantity',
+      label: 'QTY',
+    },
+
+    {
+      key: 'rate',
+      label: 'RATE',
+      align: 'right',
     },
 
     {
@@ -122,15 +134,21 @@ export default function Orders() {
 
       render: (val) => (
 
-        <Badge variant={STATUS_VARIANT[val] ?? 'default'}>
-          {val?.charAt(0).toUpperCase() + val?.slice(1)}
+        <Badge
+          variant={
+            STATUS_VARIANT[
+              val?.toLowerCase()
+            ] ?? 'default'
+          }
+        >
+          {val}
         </Badge>
 
       ),
     },
 
     {
-      key: 'date',
+      key: 'created_at',
       label: 'DATE',
     },
 
@@ -140,22 +158,29 @@ export default function Orders() {
 
       render: (_, row) => (
 
-        <div style={{ display: 'flex', gap: '8px' }}>
+        <div
+          style={{
+            display: 'flex',
+            gap: '8px',
+          }}
+        >
 
           <Button
             size="sm"
             variant="primary"
-            onClick={() => acceptOrder(row.id)}
+            onClick={() => acceptOrder(row.order_id)}
+            disabled={actionLoading === row.order_id}
           >
-            Accept
+            {actionLoading === row.order_id ? <Spinner size="sm" color="#fff" /> : 'Accept'}
           </Button>
 
           <Button
             size="sm"
             variant="outline"
-            onClick={() => completeOrder(row.id)}
+            onClick={() => completeOrder(row.order_id)}
+            disabled={actionLoading === row.order_id}
           >
-            Complete
+            {actionLoading === row.order_id ? <Spinner size="sm" color="#3b82f6" /> : 'Complete'}
           </Button>
 
         </div>
@@ -164,36 +189,54 @@ export default function Orders() {
   ];
 
   // ================= FILTER =================
-  const filtered = orders.filter((o) => {
+  const filtered = orders.filter(
+    (o) => {
 
-    const matchesFilter =
-      filter === 'All' ||
-      o.status?.toLowerCase() === filter.toLowerCase();
+      const matchesFilter =
 
-    const matchesSearch =
-      o.id?.toLowerCase().includes(search.toLowerCase()) ||
-      o.customer?.toLowerCase().includes(search.toLowerCase());
+        filter === 'All' ||
 
-    const matchesFrom =
-      !dateFrom || o.date >= dateFrom;
+        o.status?.toLowerCase() ===
+        filter.toLowerCase();
 
-    const matchesTo =
-      !dateTo || o.date <= dateTo;
+      const matchesSearch =
 
-    return (
-      matchesFilter &&
-      matchesSearch &&
-      matchesFrom &&
-      matchesTo
-    );
-  });
+        o.order_id?.toLowerCase().includes(
+          search.toLowerCase()
+        ) ||
 
-  // ================= CLEAR DATES =================
-  const handleClearDates = () => {
+        o.customer_name?.toLowerCase().includes(
+          search.toLowerCase()
+        ) ||
 
-    setDateFrom('');
-    setDateTo('');
-  };
+        o.item_name?.toLowerCase().includes(
+          search.toLowerCase()
+        ) ||
+
+        o.customer_code?.toLowerCase().includes(
+          search.toLowerCase()
+        );
+
+      return (
+        matchesFilter &&
+        matchesSearch
+      );
+    }
+  );
+
+  // ================= PAGINATION =================
+  const {
+
+    currentPage,
+    totalPages,
+    currentItems,
+    onPageChange,
+    totalItems,
+
+  } = usePagination(
+    filtered,
+    10
+  );
 
   // ================= LOADING =================
   if (loading) {
@@ -203,14 +246,15 @@ export default function Orders() {
       <div className="page">
 
         <div className="page__header">
-          <h1 className="page__title">Orders</h1>
+
+          <h1 className="page__title">
+            Orders
+          </h1>
+
         </div>
 
-        <div style={{
-          padding: '20px',
-          textAlign: 'center',
-        }}>
-          Loading orders...
+        <div style={{ marginBottom: '24px' }}>
+          <LoadingSkeleton rows={5} columns={6} />
         </div>
 
       </div>
@@ -222,7 +266,7 @@ export default function Orders() {
 
     <div className="page">
 
-      {/* Header */}
+      {/* HEADER */}
       <div className="orders-page-header">
 
         <div>
@@ -237,49 +281,31 @@ export default function Orders() {
 
         </div>
 
-        <Button
-          variant="primary"
-          onClick={() => setShowOrderModal(true)}
-        >
-          + Create Order
-        </Button>
-
       </div>
 
-      {/* Card */}
+      {/* CARD */}
       <div className="orders-card">
 
-        {/* Toolbar */}
+        {/* TOOLBAR */}
         <div className="orders-toolbar">
 
-          {/* Search */}
+          {/* SEARCH */}
           <div className="orders-search-wrap">
-
-            <svg
-              className="orders-search-icon"
-              width="15"
-              height="15"
-              viewBox="0 0 24 24"
-              fill="none"
-              stroke="currentColor"
-              strokeWidth="2"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            >
-              <circle cx="11" cy="11" r="8" />
-              <line x1="21" y1="21" x2="16.65" y2="16.65" />
-            </svg>
 
             <input
               className="orders-search-input"
-              placeholder="Search by order ID or customer"
+              placeholder="Search order, customer or item..."
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) =>
+                setSearch(
+                  e.target.value
+                )
+              }
             />
 
           </div>
 
-          {/* Filters */}
+          {/* FILTERS */}
           <div className="orders-filters">
 
             {FILTERS.map((f) => (
@@ -291,7 +317,9 @@ export default function Orders() {
                     ? 'orders-filter-btn--active'
                     : ''
                 }`}
-                onClick={() => setFilter(f)}
+                onClick={() =>
+                  setFilter(f)
+                }
               >
                 {f}
               </button>
@@ -302,99 +330,40 @@ export default function Orders() {
 
         </div>
 
-        {/* Date Toolbar */}
-        <div
-          className="orders-date-toolbar"
-          style={{ justifyContent: 'flex-end' }}
-        >
-
-          {/* From */}
-          <div className="orders-date-group">
-
-            <label
-              className="orders-date-label"
-              htmlFor="date-from"
+        {/* TABLE OR EMPTY STATE */}
+        {filtered.length === 0 ? (
+          <EmptyState
+            icon="📭"
+            title="No orders found"
+            description={search ? `No orders matching "${search}"` : 'No orders yet. Check back later!'}
+          />
+        ) : (
+          <>
+            <div
+              style={{
+                width: '100%',
+                overflowX: 'auto',
+              }}
             >
-              From
-            </label>
 
-            <div className="orders-date-input-wrap">
-
-              <input
-                id="date-from"
-                type="date"
-                className="orders-date-input"
-                value={dateFrom}
-                max={dateTo || undefined}
-                onChange={(e) =>
-                  setDateFrom(e.target.value)
-                }
+              <Table
+                columns={COLUMNS}
+                rows={currentItems}
               />
 
             </div>
 
-          </div>
-
-          <span className="orders-date-sep">
-            —
-          </span>
-
-          {/* To */}
-          <div className="orders-date-group">
-
-            <label
-              className="orders-date-label"
-              htmlFor="date-to"
-            >
-              To
-            </label>
-
-            <div className="orders-date-input-wrap">
-
-              <input
-                id="date-to"
-                type="date"
-                className="orders-date-input"
-                value={dateTo}
-                min={dateFrom || undefined}
-                onChange={(e) =>
-                  setDateTo(e.target.value)
-                }
-              />
-
-            </div>
-
-          </div>
-
-          {/* Clear */}
-          {(dateFrom || dateTo) && (
-
-            <button
-              className="orders-date-clear"
-              onClick={handleClearDates}
-            >
-              Clear dates
-            </button>
-
-          )}
-
-        </div>
-
-        {/* Table */}
-        <Table
-          columns={COLUMNS}
-          rows={filtered}
-        />
+            {/* PAGINATION */}
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalItems}
+              itemsPerPage={10}
+              onPageChange={onPageChange}
+            />
+          </>
+        )}
 
       </div>
-
-      {/* Order Modal */}
-      {showOrderModal && (
-        <OrderModal
-          onClose={() => setShowOrderModal(false)}
-          onOrderCreated={fetchOrders}
-        />
-      )}
 
     </div>
   );

@@ -3,65 +3,35 @@ import React, {
   useEffect,
 } from 'react';
 
-import Table from '../components/Table';
+import EnhancedTable from '../components/EnhancedTable';
 import Input from '../components/Input';
-import Button from '../components/Button';
+import Pagination from '../components/Pagination';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
+
+import { usePagination } from '../hooks/usePagination';
+import { useFetchData } from '../hooks/useFetchData';
 
 import {
   productBatchAPI,
 } from '../Services/api';
 
-export default function Inventory() {
+export default function Inventory({ showToast }) {
 
   // ================= STATES =================
-  const [items, setItems] =
-    useState([]);
-
   const [search, setSearch] =
     useState('');
 
-  const [loading, setLoading] =
-    useState(false);
-
-  const [error, setError] =
-    useState(null);
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [currentLayout, setCurrentLayout] = useState('table');
 
   // ================= FETCH ITEMS =================
-  const fetchItems = async () => {
-
-    try {
-
-      setLoading(true);
-
-      const response =
-        await productBatchAPI
-          .getAllItems();
-
-      setItems(
-        response.data || []
-      );
-
-      setError(null);
-
-    } catch (err) {
-
-      console.error(err);
-
-      setError(
-        'Failed to load items'
-      );
-
-    } finally {
-
-      setLoading(false);
-    }
-  };
-
-  useEffect(() => {
-
-    fetchItems();
-
-  }, []);
+  const itemsResult = useFetchData(
+    'items',
+    () => productBatchAPI.getAllItems()
+  );
+  const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
+  const loading = itemsResult.loading;
 
   // ================= TABLE COLUMNS =================
   const COLUMNS = [
@@ -71,6 +41,8 @@ export default function Inventory() {
       key: 'image',
 
       label: 'IMAGE',
+
+      sortable: false,
 
       render: (_, row) => (
 
@@ -89,6 +61,7 @@ export default function Inventory() {
             <img
               src={row.url2}
               alt={row.name}
+              loading="lazy"
               style={{
                 width: '100%',
                 height: '100%',
@@ -123,12 +96,14 @@ export default function Inventory() {
     {
       key: 'code',
       label: 'CODE',
+      editable: true,
     },
 
     // NAME
     {
       key: 'name',
       label: 'ITEM NAME',
+      editable: true,
     },
 
     // BRAND
@@ -149,6 +124,10 @@ export default function Inventory() {
 
       label: 'PRICE',
 
+      align: 'right',
+
+      editable: true,
+
       render: (val) =>
         `₹${val || 0}`,
     },
@@ -158,6 +137,8 @@ export default function Inventory() {
       key: 'quantity',
 
       label: 'STOCK',
+
+      editable: true,
 
       render: (val) => (
 
@@ -183,6 +164,8 @@ export default function Inventory() {
       key: 'status',
 
       label: 'STATUS',
+
+      sortable: false,
 
       render: (_, row) => {
 
@@ -234,6 +217,18 @@ export default function Inventory() {
     },
   ];
 
+  const handleEdit = (rowIdx, colKey, newValue) => {
+    console.log('Edit:', { rowIdx, colKey, newValue });
+    showToast?.(`Updated ${colKey} to ${newValue}`, 'success');
+  };
+
+  const handleRowSelect = (selected) => {
+    setSelectedItems(selected);
+    if (selected.length > 0) {
+      showToast?.(`${selected.length} items selected`, 'info');
+    }
+  };
+
   // ================= SEARCH =================
   const filtered =
     items.filter((item) =>
@@ -256,6 +251,15 @@ export default function Inventory() {
           search.toLowerCase()
         )
     );
+
+  // ================= PAGINATION =================
+  const {
+    currentPage,
+    totalPages,
+    currentItems,
+    onPageChange,
+    totalItems: totalFiltered,
+  } = usePagination(filtered, 10);
 
   // ================= STATS =================
   const totalItems =
@@ -288,13 +292,8 @@ export default function Inventory() {
 
         </div>
 
-        <div
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-          }}
-        >
-          Loading inventory...
+        <div style={{ marginBottom: '24px' }}>
+          <LoadingSkeleton rows={5} columns={6} />
         </div>
 
       </div>
@@ -302,7 +301,7 @@ export default function Inventory() {
   }
 
   // ================= ERROR =================
-  if (error) {
+  if (!items || items.length === 0) {
 
     return (
 
@@ -320,10 +319,10 @@ export default function Inventory() {
           style={{
             padding: '20px',
             textAlign: 'center',
-            color: '#ef4444',
+            color: '#999',
           }}
         >
-          {error}
+          No items found
         </div>
 
       </div>
@@ -338,34 +337,35 @@ export default function Inventory() {
       {/* HEADER */}
       <div className="page__header">
 
-        <div
-          style={{
-            display: 'flex',
-            justifyContent:
-              'space-between',
-            alignItems: 'center',
-            flexWrap: 'wrap',
-            gap: '16px',
-          }}
-        >
+        <div>
 
-          <div>
+          <h1 className="page__title">
+            Inventory
+          </h1>
 
-            <h1 className="page__title">
-              Inventory
-            </h1>
-
-            <p className="page__sub">
-              Manage item inventory
-            </p>
-
-          </div>
-
-          <Button variant="primary">
-            Export Items
-          </Button>
+          <p className="page__sub">
+            {currentItems.length}
+            {' '}
+            items shown
+          </p>
 
         </div>
+
+      </div>
+
+      {/* TOOLBAR */}
+      <div className="toolbar">
+
+        <Input
+          className="toolbar__search"
+          placeholder="Search by code or name..."
+          value={search}
+          onChange={(e) =>
+            setSearch(
+              e.target.value
+            )
+          }
+        />
 
       </div>
 
@@ -431,28 +431,39 @@ export default function Inventory() {
 
       </div>
 
-      {/* SEARCH */}
-      <div
-        style={{
-          marginBottom: '20px',
-        }}
-      >
-
-        <Input
-          placeholder="Search by name, code or brand..."
-          value={search}
-          onChange={(e) =>
-            setSearch(e.target.value)
-          }
+      {/* TABLE OR EMPTY STATE */}
+      {totalFiltered === 0 ? (
+        <EmptyState
+          icon="📦"
+          title="No items found"
+          description={search ? `No items matching "${search}"` : 'Add items to your inventory to get started'}
         />
+      ) : (
+        <>
+          <EnhancedTable
+            columns={COLUMNS}
+            rows={currentLayout === 'tile' ? filtered : currentItems}
+            enableSelection={true}
+            enableEditing={true}
+            enableSorting={true}
+            enableColumnToggle={true}
+            onRowSelect={handleRowSelect}
+            onEdit={handleEdit}
+            defaultLayout="table"
+            onLayoutChange={setCurrentLayout}
+          />
 
-      </div>
-
-      {/* TABLE */}
-      <Table
-        columns={COLUMNS}
-        rows={filtered}
-      />
+          {/* PAGINATION - Only show in table view */}
+          {currentLayout === 'table' && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalFiltered}
+              itemsPerPage={10}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
+      )}
 
     </div>
   );

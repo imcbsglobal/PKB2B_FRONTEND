@@ -48,6 +48,9 @@ export default function Login({ onLogin }) {
       localStorage.setItem('refresh_token', data.refresh);
       localStorage.setItem('user_role', data.user.role);
       localStorage.setItem('user_id', data.user.id);
+      
+      // Clear the saved page so dashboard loads on fresh login
+      localStorage.removeItem('current_page');
 
       setLoading(false);
       onLogin({ name: data.user.id, role: data.user.role });

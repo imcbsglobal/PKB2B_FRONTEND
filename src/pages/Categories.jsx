@@ -1,252 +1,187 @@
 import React, {
   useState,
   useEffect,
-  useCallback,
 } from 'react';
 
-import Table from '../components/Table';
+import EnhancedTable from '../components/EnhancedTable';
 import Input from '../components/Input';
+import Pagination from '../components/Pagination';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
 
 import {
-  productAPI,
+  categoryAPI,
   productBatchAPI,
 } from '../Services/api';
 
-export default function Categories() {
+import {
+  usePagination,
+} from '../hooks/usePagination';
+import { useFetchData } from '../hooks/useFetchData';
+
+export default function Categories({ showToast }) {
 
   // ================= STATES =================
-  const [products, setProducts] =
-    useState([]);
-
-  const [search, setSearch] =
-    useState('');
-
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
-    useState(null);
-
-  const [selectedCategory, setSelectedCategory] =
-    useState(null);
-
-  const [modalOpen, setModalOpen] =
-    useState(false);
-
-  const [categoryItems, setCategoryItems] =
-    useState([]);
-
-  const [itemsLoading, setItemsLoading] =
-    useState(false);
-
-  // ================= FETCH PRODUCTS =================
-  const fetchProducts = async () => {
-
+  const [search, setSearch] = useState('');
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [currentLayout, setCurrentLayout] = useState('table');
+  const [favoriteOverrides, setFavoriteOverrides] = useState(() => {
     try {
+      const saved = localStorage.getItem('local_fav_categories');
+      if (!saved) return {};
+      const arr = JSON.parse(saved);
+      return arr.reduce((acc, name) => {
+        if (name) acc[name.trim().toLowerCase()] = true;
+        return acc;
+      }, {});
+    } catch (e) {
+      return {};
+    }
+  });
 
-      setLoading(true);
+  // ================= FETCH DATA WITH CACHE =================
+  const categoriesResult = useFetchData(
+    'categories',
+    () => categoryAPI.getCategories()
+  );
 
-      // Fetch categories
-      const categoryResponse =
-        await productAPI.getAllProducts();
+  const itemsResult = useFetchData(
+    'items',
+    () => productBatchAPI.getAllItems()
+  );
 
-      // Fetch items to count
-      const itemsResponse =
-        await productBatchAPI
-          .getAllItems();
+  const categories = Array.isArray(categoriesResult.data) ? categoriesResult.data : [];
+  const allItems = Array.isArray(itemsResult.data) ? itemsResult.data : [];
+  const loading = categoriesResult.loading || itemsResult.loading;
 
-      console.log(
-        'Categories:',
-        categoryResponse.data.map(
-          (c) => c.name
-        )
-      );
+  // ================= PROCESS CATEGORIES WITH COUNTS =================
+  const processedCategories = React.useMemo(() => {
+    const countMap = {};
+    allItems.forEach(item => {
+      const key = (item.company || '').trim().toLowerCase();
+      countMap[key] = (countMap[key] || 0) + 1;
+    });
 
-      console.log(
-        'Items sample:',
-        itemsResponse.data?.slice(0, 5)
-      );
+    return categories.map(cat => {
+      const categoryKey = (cat.name || '').trim().toLowerCase();
+      return {
+        ...cat,
+        itemCount: countMap[categoryKey] || 0,
+        isFavorite: favoriteOverrides[categoryKey] ?? cat.is_favorite ?? false,
+      };
+    });
+  }, [categories, allItems, favoriteOverrides]);
 
-      // Count items by checking multiple fields
-      const itemCounts = {};
-      (itemsResponse.data || [])
-        .forEach((item) => {
-          // Try matching by product, category, name, or any relevant field
-          const productField =
-            item.product
-              ?.toLowerCase()
-              .trim();
-          const categoryField =
-            item.category
-              ?.toLowerCase()
-              .trim();
-          const nameField =
-            item.name
-              ?.toLowerCase()
-              .trim();
+  const handleEdit = (rowIdx, colKey, newValue) => {
+    console.log('Edit:', { rowIdx, colKey, newValue });
+    showToast?.(`Updated ${colKey} to ${newValue}`, 'success');
+  };
 
-          if (productField) {
-            itemCounts[productField] =
-              (itemCounts[productField] || 0) + 1;
-          }
-          if (categoryField) {
-            itemCounts[categoryField] =
-              (itemCounts[categoryField] || 0) + 1;
-          }
-        });
-
-      console.log(
-        'Item counts by field:',
-        itemCounts
-      );
-
-      // Add count to categories
-      const productsWithId =
-        categoryResponse.data.map(
-          (product, index) => {
-            const categoryKey =
-              product.name
-                ?.toLowerCase()
-                .trim();
-            const count =
-              itemCounts[categoryKey] || 0;
-
-            console.log(
-              `Category "${product.name}" -> key "${categoryKey}" -> count ${count}`
-            );
-
-            return {
-              ...product,
-              id: product.id || index,
-              itemCount: count,
-            };
-          }
-        );
-
-      setProducts(productsWithId);
-
-      setError(null);
-
-    } catch (err) {
-
-      console.error(err);
-
-      setError(
-        'Failed to load categories'
-      );
-
-      setProducts([]);
-
-    } finally {
-
-      setLoading(false);
+  const handleRowSelect = (selected) => {
+    setSelectedCategories(selected);
+    if (selected.length > 0) {
+      showToast?.(`${selected.length} categories selected`, 'info');
     }
   };
 
-  useEffect(() => {
+  // ================= TOGGLE FAVORITE (UI-only - backend not implemented) =================
+  const toggleFavorite = (categoryName) => {
+    const key = categoryName.trim().toLowerCase();
+    const current = processedCategories.find(c => (c.name || '').trim().toLowerCase() === key);
+    const newVal = !current?.isFavorite;
+    setFavoriteOverrides(prev => ({ ...prev, [key]: newVal }));
 
-    fetchProducts();
+    // persist to localStorage as an array of names
+    try {
+      const saved = localStorage.getItem('local_fav_categories');
+      const arr = saved ? JSON.parse(saved) : [];
+      const normalized = arr.map(n => n.trim().toLowerCase());
+      if (newVal) {
+        if (!normalized.includes(key)) normalized.push(categoryName);
+      } else {
+        const idx = normalized.indexOf(key);
+        if (idx !== -1) normalized.splice(idx, 1);
+      }
+      localStorage.setItem('local_fav_categories', JSON.stringify(normalized));
+    } catch (e) {
+      console.error('Failed to persist local favorites', e);
+    }
 
-  }, []);
+    showToast?.(newVal ? 'Added to favorites (local)' : 'Removed from favorites (local)', 'success');
+  };
 
-  // ================= OPEN CATEGORY MODAL =================
-  const handleCategoryClick = async (category) => {
+  const [selectedCategory,
+    setSelectedCategory] =
+    useState(null);
 
-    setSelectedCategory(category);
+  const [modalOpen,
+    setModalOpen] =
+    useState(false);
+
+  const [categoryItems,
+    setCategoryItems] =
+    useState([]);
+
+  // ================= FETCH DATA WITH CACHE =================
+  // Already handled by useFetchData hooks above
+
+  // ================= OPEN CATEGORY =================
+  const handleCategoryClick = (
+    category
+  ) => {
+
+    setSelectedCategory(
+      category
+    );
+
+    // ================= FILTER ITEMS =================
+    // MATCH:
+    // CATEGORY NAME = ITEM COMPANY
+    const filteredItems =
+      allItems.filter(
+        (item) =>
+
+          item.company
+            ?.toLowerCase() ===
+
+          category.name
+            ?.toLowerCase()
+      );
+
+    setCategoryItems(
+      filteredItems
+    );
 
     setModalOpen(true);
-
-    try {
-
-      setItemsLoading(true);
-
-      const response =
-        await productBatchAPI
-          .getAllItems();
-
-      // Filter items by product (category)
-      const filtered =
-        (response.data || []).filter(
-          (item) =>
-            item.product?.toLowerCase() ===
-            category.name?.toLowerCase()
-        );
-
-      setCategoryItems(filtered);
-
-    } catch (err) {
-
-      console.error(err);
-
-      setCategoryItems([]);
-
-    } finally {
-
-      setItemsLoading(false);
-    }
   };
 
-  // ================= FAVORITE =================
-  const toggleFavorite =
-    useCallback(async (row) => {
-
-      try {
-
-        // UPDATE UI INSTANTLY
-        setProducts((prev) =>
-          prev.map((product) =>
-
-            product.id === row.id
-              ? {
-                  ...product,
-                  is_favorite:
-                    !product.is_favorite,
-                }
-              : product
-          )
-        );
-
-        // CALL API
-        await productAPI
-          .toggleProductFavorite(
-            row.name
-          );
-
-      } catch (error) {
-
-        console.error(error);
-
-        // REFRESH IF FAILED
-        fetchProducts();
-      }
-
-    }, []);
-
-  // ================= TABLE COLUMNS =================
+  // ================= CATEGORY TABLE =================
   const COLUMNS = [
 
     // IMAGE
     {
-      key: 'image',
-
+      key: 'url',
       label: 'IMAGE',
-
+      sortable: false,
       render: (_, row) => (
 
         <div
           style={{
             width: '60px',
             height: '60px',
-            background: '#f0f0f0',
             borderRadius: '8px',
             overflow: 'hidden',
+            background: '#f3f4f6',
           }}
         >
 
           {row.url ? (
 
             <img
-              src={row.url}
+              src={row.url.replace(
+                /\\/g,
+                '/'
+              )}
               alt={row.name}
               style={{
                 width: '100%',
@@ -259,11 +194,13 @@ export default function Categories() {
 
             <div
               style={{
+                width: '100%',
+                height: '100%',
                 display: 'flex',
                 justifyContent:
                   'center',
-                alignItems: 'center',
-                height: '100%',
+                alignItems:
+                  'center',
                 fontSize: '12px',
                 color: '#999',
               }}
@@ -277,11 +214,13 @@ export default function Categories() {
       ),
     },
 
-    // NAME
+    // CATEGORY
     {
       key: 'name',
-      label: 'NAME',
+      label: 'CATEGORY',
+      editable: true,
       render: (_, row) => (
+
         <button
           onClick={() =>
             handleCategoryClick(row)
@@ -291,18 +230,26 @@ export default function Categories() {
             border: 'none',
             cursor: 'pointer',
             color: '#2563eb',
-            textDecoration: 'underline',
+            textDecoration:
+              'underline',
             fontSize: '14px',
-            fontWeight: '500',
+            fontWeight: '600',
             padding: 0,
           }}
         >
           {row.name}
         </button>
+
       ),
     },
 
-    // ITEMS COUNT
+    // TYPE
+    {
+      key: 'type',
+      label: 'TYPE',
+    },
+
+    // ITEM COUNT
     {
       key: 'itemCount',
       label: 'ITEMS',
@@ -310,12 +257,10 @@ export default function Categories() {
       render: (val) => (
         <span
           style={{
+            background: '#f3f4f6',
+            padding: '6px 12px',
+            borderRadius: '20px',
             fontWeight: '600',
-            color: '#666',
-            background: '#f0f0f0',
-            padding: '4px 12px',
-            borderRadius: '16px',
-            display: 'inline-block',
           }}
         >
           {val || 0}
@@ -326,48 +271,170 @@ export default function Categories() {
     // FAVORITE
     {
       key: 'favorite',
-
       label: 'FAVORITE',
-
       align: 'center',
+      sortable: false,
+      render: (_, row) => {
+        const categoryName = row.name;
+        return (
+          <button
+            onClick={() => toggleFavorite(categoryName)}
+            style={{
+              border: 'none',
+              background: 'none',
+              cursor: 'pointer',
+              fontSize: '24px',
+            }}
+          >
+            {row.isFavorite ? '❤️' : '🤍'}
+          </button>
+        );
+      },
+    },
+  ];
+
+  // ================= ITEM TABLE =================
+  const ITEM_COLUMNS = [
+
+    // IMAGE
+    {
+      key: 'url2',
+
+      label: 'IMAGE',
 
       render: (_, row) => (
 
-        <button
-          onClick={() =>
-            toggleFavorite(row)
-          }
+        <div
           style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '20px',
-            color:
-              row.is_favorite
-                ? '#FF6B6B'
-                : '#ccc',
-            transition:
-              '0.2s ease',
+            width: '50px',
+            height: '50px',
+            borderRadius: '6px',
+            overflow: 'hidden',
+            background: '#f3f4f6',
           }}
         >
-          {row.is_favorite
-            ? '♥'
-            : '♡'}
-        </button>
+
+          {row.url2 ? (
+
+            <img
+              src={row.url2}
+              alt={row.name}
+              style={{
+                width: '100%',
+                height: '100%',
+                objectFit: 'cover',
+              }}
+            />
+
+          ) : (
+
+            <div
+              style={{
+                width: '100%',
+                height: '100%',
+                display: 'flex',
+                justifyContent:
+                  'center',
+                alignItems:
+                  'center',
+                fontSize: '10px',
+                color: '#999',
+              }}
+            >
+              No Img
+            </div>
+
+          )}
+
+        </div>
+      ),
+    },
+
+    // CODE
+    {
+      key: 'code',
+      label: 'CODE',
+    },
+
+    // ITEM NAME
+    {
+      key: 'name',
+      label: 'ITEM NAME',
+    },
+
+    // BRAND
+    {
+      key: 'brand',
+      label: 'BRAND',
+    },
+
+    // PRODUCT TYPE
+    {
+      key: 'product',
+      label: 'PRODUCT',
+    },
+
+    // PRICE
+    {
+      key: 'price',
+
+      label: 'PRICE',
+
+      align: 'right',
+
+      render: (val) =>
+        `₹${val || 0}`,
+    },
+
+    // STOCK
+    {
+      key: 'quantity',
+
+      label: 'STOCK',
+
+      render: (val) => (
+
+        <span
+          style={{
+            fontWeight: '600',
+            color:
+              val <= 0
+                ? '#ef4444'
+                : '#16a34a',
+          }}
+        >
+          {val}
+        </span>
+
       ),
     },
   ];
 
   // ================= SEARCH =================
   const filtered =
-    products.filter((p) =>
+    processedCategories.filter((c) =>
 
-      p.name
+      c.name
         ?.toLowerCase()
         .includes(
           search.toLowerCase()
         )
     );
+
+  // ================= PAGINATION =================
+  const {
+
+    currentPage,
+    totalItems:
+      totalFiltered,
+
+    currentItems,
+    onPageChange,
+
+  } = usePagination(
+    filtered,
+    10
+  );
 
   // ================= LOADING =================
   if (loading) {
@@ -376,51 +443,13 @@ export default function Categories() {
 
       <div className="page">
 
-        <div className="page__header">
+        <h1 className="page__title">
+          Categories
+        </h1>
 
-          <h1 className="page__title">
-            Categories
-          </h1>
-
+        <div style={{ marginBottom: '24px', marginTop: '24px' }}>
+          <LoadingSkeleton rows={5} columns={6} />
         </div>
-
-        <p
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-          }}
-        >
-          Loading categories...
-        </p>
-
-      </div>
-    );
-  }
-
-  // ================= ERROR =================
-  if (error) {
-
-    return (
-
-      <div className="page">
-
-        <div className="page__header">
-
-          <h1 className="page__title">
-            Categories
-          </h1>
-
-        </div>
-
-        <p
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: '#ff6b6b',
-          }}
-        >
-          {error}
-        </p>
 
       </div>
     );
@@ -450,7 +479,7 @@ export default function Categories() {
 
       </div>
 
-      {/* TOOLBAR */}
+      {/* SEARCH */}
       <div className="toolbar">
 
         <Input
@@ -458,17 +487,47 @@ export default function Categories() {
           placeholder="Search categories..."
           value={search}
           onChange={(e) =>
-            setSearch(e.target.value)
+            setSearch(
+              e.target.value
+            )
           }
         />
 
       </div>
 
-      {/* TABLE */}
-      <Table
-        columns={COLUMNS}
-        rows={filtered}
-      />
+      {/* CATEGORY TABLE OR EMPTY STATE */}
+      {totalFiltered === 0 ? (
+        <EmptyState
+          icon="📂"
+          title="No categories found"
+          description={search ? `No categories matching "${search}"` : 'No categories available'}
+        />
+      ) : (
+        <>
+          <EnhancedTable
+            columns={COLUMNS}
+            rows={currentLayout === 'tile' ? filtered : currentItems}
+            enableSelection={true}
+            enableEditing={true}
+            enableSorting={true}
+            enableColumnToggle={true}
+            onRowSelect={handleRowSelect}
+            onEdit={handleEdit}
+            defaultLayout="table"
+            onLayoutChange={setCurrentLayout}
+          />
+
+          {/* PAGINATION - Only show in table view */}
+          {currentLayout === 'table' && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalFiltered}
+              itemsPerPage={10}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
+      )}
 
       {/* MODAL */}
       {modalOpen && (
@@ -482,7 +541,8 @@ export default function Categories() {
             display: 'flex',
             justifyContent:
               'center',
-            alignItems: 'center',
+            alignItems:
+              'center',
             zIndex: 999,
             padding: '20px',
           }}
@@ -491,47 +551,74 @@ export default function Categories() {
           <div
             style={{
               width: '100%',
-              maxWidth: '900px',
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              maxHeight: '80vh',
-              overflow: 'auto',
+              maxWidth:
+                '1200px',
+              background:
+                '#fff',
+              borderRadius:
+                '12px',
+              padding:
+                '24px',
+              maxHeight:
+                '85vh',
+              overflow:
+                'auto',
             }}
           >
 
-            {/* HEADER */}
+            {/* MODAL HEADER */}
             <div
               style={{
                 display: 'flex',
                 justifyContent:
                   'space-between',
-                alignItems: 'center',
-                marginBottom: '20px',
+                alignItems:
+                  'center',
+                marginBottom:
+                  '20px',
               }}
             >
 
-              <h2
-                style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                }}
-              >
-                {selectedCategory?.name}
-                {' '}
-                Items
-              </h2>
+              <div>
+
+                <h2
+                  style={{
+                    margin: 0,
+                    fontSize: '24px',
+                    fontWeight: '700',
+                  }}
+                >
+                  {
+                    selectedCategory
+                      ?.name
+                  }
+                </h2>
+
+                <p
+                  style={{
+                    marginTop: '6px',
+                    color: '#666',
+                  }}
+                >
+                  {
+                    categoryItems
+                      .length
+                  }
+                  {' '}
+                  items found
+                </p>
+
+              </div>
 
               <button
                 onClick={() =>
                   setModalOpen(false)
                 }
                 style={{
-                  background: 'none',
                   border: 'none',
+                  background: 'none',
                   fontSize: '28px',
                   cursor: 'pointer',
-                  color: '#666',
                 }}
               >
                 ×
@@ -539,230 +626,16 @@ export default function Categories() {
 
             </div>
 
-            {/* ITEMS COUNT */}
-            <p
-              style={{
-                marginBottom: '16px',
-                color: '#666',
-              }}
-            >
-              {categoryItems.length}
-              {' '}
-              items found
-            </p>
-
-            {/* LOADING */}
-            {itemsLoading ? (
-
-              <div
-                style={{
-                  padding: '20px',
-                  textAlign: 'center',
-                }}
-              >
-                Loading items...
-              </div>
-
-            ) : categoryItems.length === 0 ? (
-
-              <div
-                style={{
-                  padding: '20px',
-                  textAlign: 'center',
-                  color: '#999',
-                }}
-              >
-                No items found for
-                {' '}
-                {selectedCategory?.name}
-              </div>
-
-            ) : (
-
-              <Table
-                columns={[
-
-                  {
-                    key: 'image',
-                    label: 'IMAGE',
-                    render: (_, row) => (
-
-                      <div
-                        style={{
-                          width: '50px',
-                          height: '50px',
-                          background:
-                            '#f0f0f0',
-                          borderRadius:
-                            '6px',
-                          overflow:
-                            'hidden',
-                        }}
-                      >
-
-                        {row.url2 ? (
-
-                          <img
-                            src={
-                              row.url2
-                            }
-                            alt={
-                              row.name
-                            }
-                            style={{
-                              width:
-                                '100%',
-                              height:
-                                '100%',
-                              objectFit:
-                                'cover',
-                            }}
-                          />
-
-                        ) : (
-
-                          <div
-                            style={{
-                              width:
-                                '100%',
-                              height:
-                                '100%',
-                              display:
-                                'flex',
-                              justifyContent:
-                                'center',
-                              alignItems:
-                                'center',
-                              fontSize:
-                                '10px',
-                              color:
-                                '#999',
-                            }}
-                          >
-                            No Img
-                          </div>
-
-                        )}
-
-                      </div>
-                    ),
-                  },
-
-                  {
-                    key: 'code',
-                    label: 'CODE',
-                  },
-
-                  {
-                    key: 'name',
-                    label: 'NAME',
-                  },
-
-                  {
-                    key: 'brand',
-                    label: 'BRAND',
-                  },
-
-                  {
-                    key: 'price',
-                    label: 'PRICE',
-                    render: (val) =>
-                      `₹${val || 0}`,
-                  },
-
-                  {
-                    key: 'quantity',
-                    label: 'STOCK',
-                    render: (val) => (
-
-                      <span
-                        style={{
-                          fontWeight:
-                            '600',
-                          color:
-                            val <= 0
-                              ? '#ef4444'
-                              : val <= 5
-                              ? '#f59e0b'
-                              : '#16a34a',
-                        }}
-                      >
-                        {val}
-                      </span>
-
-                    ),
-                  },
-
-                  {
-                    key: 'status',
-                    label: 'STATUS',
-                    render: (_, row) => {
-
-                      if (
-                        row.quantity <=
-                        0
-                      ) {
-
-                        return (
-
-                          <span
-                            style={{
-                              color:
-                                '#ef4444',
-                              fontWeight:
-                                '600',
-                            }}
-                          >
-                            Out of
-                            {' '}
-                            Stock
-                          </span>
-
-                        );
-                      }
-
-                      if (
-                        row.quantity <=
-                        5
-                      ) {
-
-                        return (
-
-                          <span
-                            style={{
-                              color:
-                                '#f59e0b',
-                              fontWeight:
-                                '600',
-                            }}
-                          >
-                            Low Stock
-                          </span>
-
-                        );
-                      }
-
-                      return (
-
-                        <span
-                          style={{
-                            color:
-                              '#16a34a',
-                            fontWeight:
-                              '600',
-                          }}
-                        >
-                          In Stock
-                        </span>
-
-                      );
-                    },
-                  },
-                ]}
-                rows={categoryItems}
-              />
-
-            )}
+            {/* ITEMS TABLE */}
+            <EnhancedTable
+              columns={ITEM_COLUMNS}
+              rows={categoryItems}
+              enableSelection={false}
+              enableEditing={false}
+              enableSorting={true}
+              enableColumnToggle={true}
+              defaultLayout="table"
+            />
 
           </div>
 

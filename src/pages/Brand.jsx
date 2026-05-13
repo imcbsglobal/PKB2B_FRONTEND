@@ -1,228 +1,203 @@
-// src/pages/Brand.jsx
-
 import React, {
   useState,
-  useEffect,
-  useCallback,
+  useMemo,
 } from 'react';
 
-import Table from '../components/Table';
+import EnhancedTable from '../components/EnhancedTable';
 import Input from '../components/Input';
+import Pagination from '../components/Pagination';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
 
 import {
   brandAPI,
   productBatchAPI,
 } from '../Services/api';
 
-export default function Brand() {
+import {
+  usePagination,
+} from '../hooks/usePagination';
+
+import {
+  useFetchData,
+} from '../hooks/useFetchData';
+
+export default function Brands({ showToast }) {
 
   // ================= STATES =================
-  const [brands, setBrands] =
-    useState([]);
-
   const [search, setSearch] =
     useState('');
 
-  const [loading, setLoading] =
-    useState(true);
-
-  const [error, setError] =
+  const [selectedBrand,
+    setSelectedBrand] =
     useState(null);
 
-  const [selectedBrand, setSelectedBrand] =
-    useState(null);
-
-  const [modalOpen, setModalOpen] =
+  const [modalOpen,
+    setModalOpen] =
     useState(false);
 
-  const [brandItems, setBrandItems] =
+  const [brandItems,
+    setBrandItems] =
     useState([]);
 
-  const [itemsLoading, setItemsLoading] =
-    useState(false);
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [currentLayout, setCurrentLayout] = useState('table');
 
-  // ================= FETCH BRANDS =================
-  const fetchBrands = async () => {
+  // ================= FETCH DATA =================
+  const brandsResult =
+    useFetchData(
+      'brands',
+      () => brandAPI.getAllBrands()
+    );
 
-    try {
+  const itemsResult =
+    useFetchData(
+      'items',
+      () => productBatchAPI.getAllItems()
+    );
 
-      setLoading(true);
+  const loading =
+    brandsResult.loading ||
+    itemsResult.loading;
 
-      // Fetch brands
-      const brandResponse =
-        await brandAPI.getAllBrands();
+  const items = useMemo(
+    () => Array.isArray(itemsResult.data) ? itemsResult.data : [],
+    [itemsResult.data]
+  );
 
-      // Fetch items to count
-      const itemsResponse =
-        await productBatchAPI
-          .getAllItems();
+  // ================= PROCESS BRANDS =================
+  // Build a brand→count map once (O(n)) instead of nested filter per brand (O(n×m))
+  const [favoriteOverrides, setFavoriteOverrides] = useState({});
 
-      console.log(
-        'Items data:',
-        itemsResponse.data
-      );
+  const brands = useMemo(() => {
+    const brandsData = Array.isArray(brandsResult.data) ? brandsResult.data : [];
 
-      // Count items by brand
-      const itemCounts = {};
-      (itemsResponse.data || [])
-        .forEach((item) => {
-          const brandName =
-            item.brand
-              ?.toLowerCase()
-              .trim();
-          itemCounts[brandName] =
-            (itemCounts[brandName] || 0) + 1;
-        });
+    const countMap = {};
+    items.forEach(item => {
+      const key = (item.brand || '').trim().toLowerCase();
+      countMap[key] = (countMap[key] || 0) + 1;
+    });
 
-      console.log(
-        'Item counts:',
-        itemCounts
-      );
+    return brandsData.map(brand => {
+      const brandKey = (brand.brand || brand.name || '').trim().toLowerCase();
+      return {
+        ...brand,
+        itemCount: countMap[brandKey] || 0,
+        isFavorite: favoriteOverrides[brandKey] ?? brand.is_favorite ?? false,
+      };
+    });
+  }, [brandsResult.data, items, favoriteOverrides]);
 
-      // Add count to brands
-      const brandsWithId =
-        brandResponse.data.map(
-          (brand, index) => ({
-            ...brand,
-            id: brand.id || index,
-            itemCount:
-              itemCounts[
-                brand.name
-                  ?.toLowerCase()
-                  .trim()
-              ] || 0,
-          })
-        );
+  const handleEdit = (rowIdx, colKey, newValue) => {
+    console.log('Edit:', { rowIdx, colKey, newValue });
+    showToast?.(`Updated ${colKey} to ${newValue}`, 'success');
+  };
 
-      setBrands(brandsWithId);
-
-      setError(null);
-
-    } catch (err) {
-
-      console.error(err);
-
-      setError(
-        'Failed to load brands'
-      );
-
-      setBrands([]);
-
-    } finally {
-
-      setLoading(false);
+  const handleRowSelect = (selected) => {
+    setSelectedBrands(selected);
+    if (selected.length > 0) {
+      showToast?.(`${selected.length} brands selected`, 'info');
     }
   };
 
-  useEffect(() => {
+  // ================= OPEN BRAND =================
+  const handleBrandClick = (
+    brand
+  ) => {
 
-    fetchBrands();
+    setSelectedBrand(
+      brand
+    );
 
-  }, []);
+    const brandName =
+      (
+        brand.brand ||
+        brand.name ||
+        ''
+      )
+        .trim()
+        .toLowerCase();
 
-  // ================= OPEN BRAND MODAL =================
-  const handleBrandClick = async (brand) => {
+    // FILTER ITEMS
+    const filteredItems =
+      items.filter((item) => {
 
-    setSelectedBrand(brand);
+        const itemBrand =
+          (
+            item.brand || ''
+          )
+            .trim()
+            .toLowerCase();
+
+        return (
+          itemBrand ===
+          brandName
+        );
+      });
+
+    setBrandItems(
+      filteredItems
+    );
 
     setModalOpen(true);
+  };
 
+  // ================= TOGGLE FAVORITE =================
+  const toggleFavorite = async (brandName) => {
+    const key = brandName.trim().toLowerCase();
+    const current = brands.find(b => (b.brand || b.name || '').trim().toLowerCase() === key);
+    setFavoriteOverrides(prev => ({ ...prev, [key]: !current?.isFavorite }));
     try {
-
-      setItemsLoading(true);
-
-      const response =
-        await productBatchAPI
-          .getAllItems();
-
-      // Filter items by brand name
-      const filtered =
-        (response.data || []).filter(
-          (item) =>
-            item.brand?.toLowerCase() ===
-            brand.name?.toLowerCase()
-        );
-
-      setBrandItems(filtered);
-
+      const response = await brandAPI.toggleBrandFavorite(brandName);
+      const isFavorite = response.data?.is_favorite;
+      setFavoriteOverrides(prev => ({ ...prev, [key]: isFavorite }));
+      showToast?.(isFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
     } catch (err) {
-
-      console.error(err);
-
-      setBrandItems([]);
-
-    } finally {
-
-      setItemsLoading(false);
+      setFavoriteOverrides(prev => ({ ...prev, [key]: current?.isFavorite }));
+      console.error('Favorite Error:', err);
+      showToast?.('Failed to update favorite', 'error');
     }
   };
 
-  // ================= FAVORITE =================
-  const toggleFavorite =
-    useCallback(async (row) => {
-
-      try {
-
-        // OPTIMISTIC UPDATE
-        setBrands((prev) =>
-          prev.map((brand) =>
-
-            brand.id === row.id
-              ? {
-                  ...brand,
-                  is_favorite:
-                    !brand.is_favorite,
-                }
-              : brand
-          )
-        );
-
-        // API CALL
-        await brandAPI
-          .toggleBrandFavorite(
-            row.name
-          );
-
-      } catch (error) {
-
-        console.error(error);
-
-        // REFRESH IF FAILED
-        fetchBrands();
-      }
-
-    }, []);
-
-  // ================= TABLE COLUMNS =================
+  // ================= COLUMNS =================
   const COLUMNS = [
 
-    // LOGO
+    // IMAGE
     {
-      key: 'logo',
-
-      label: 'LOGO',
-
+      key: 'image',
+      label: 'IMAGE',
+      sortable: false,
       render: (_, row) => (
 
         <div
           style={{
-            width: '60px',
-            height: '60px',
-            background: '#f0f0f0',
-            borderRadius: '8px',
+            width: '70px',
+            height: '70px',
+            borderRadius: '10px',
             overflow: 'hidden',
+            background:
+              '#f3f4f6',
           }}
         >
 
-          {row.logo ? (
+          {row.url ||
+          row.image ? (
 
             <img
-              src={row.logo}
-              alt={row.name}
+              src={
+                row.url ||
+                row.image
+              }
+              alt={
+                row.brand ||
+                row.name
+              }
+              loading="lazy"
               style={{
                 width: '100%',
                 height: '100%',
-                objectFit: 'cover',
+                objectFit:
+                  'cover',
               }}
             />
 
@@ -230,17 +205,21 @@ export default function Brand() {
 
             <div
               style={{
-                display: 'flex',
+                width: '100%',
+                height: '100%',
+                display:
+                  'flex',
                 justifyContent:
                   'center',
-                alignItems: 'center',
-                height: '100%',
-                fontSize: '12px',
-                color: '#999',
-                fontWeight: '600',
+                alignItems:
+                  'center',
+                fontSize:
+                  '12px',
+                color:
+                  '#999',
               }}
             >
-              {row.name?.charAt(0)}
+              No Image
             </div>
 
           )}
@@ -249,84 +228,109 @@ export default function Brand() {
       ),
     },
 
-    // NAME
+    // BRAND
     {
-      key: 'name',
+      key: 'brand',
       label: 'BRAND',
+      editable: true,
       render: (_, row) => (
+
         <button
           onClick={() =>
-            handleBrandClick(row)
+            handleBrandClick(
+              row
+            )
           }
           style={{
-            background: 'none',
+            background:
+              'none',
             border: 'none',
-            cursor: 'pointer',
-            color: '#2563eb',
-            textDecoration: 'underline',
-            fontSize: '14px',
-            fontWeight: '500',
-            padding: 0,
+            cursor:
+              'pointer',
+            color:
+              '#2563eb',
+            textDecoration:
+              'underline',
+            fontWeight:
+              '600',
+            fontSize:
+              '14px',
           }}
         >
-          {row.name}
+          {
+            row.brand ||
+            row.name
+          }
         </button>
+
       ),
     },
 
-    // ITEMS COUNT
+    // ITEM COUNT
     {
       key: 'itemCount',
+
       label: 'ITEMS',
+
       align: 'center',
+
       render: (val) => (
+
         <span
           style={{
-            fontWeight: '600',
-            color: '#666',
-            background: '#f0f0f0',
-            padding: '4px 12px',
-            borderRadius: '16px',
-            display: 'inline-block',
+            background:
+              '#f3f4f6',
+            padding:
+              '6px 12px',
+            borderRadius:
+              '20px',
+            fontWeight:
+              '600',
           }}
         >
           {val || 0}
         </span>
+
       ),
     },
 
     // FAVORITE
     {
       key: 'favorite',
-
       label: 'FAVORITE',
-
       align: 'center',
+      sortable: false,
+      render: (_, row) => {
 
-      render: (_, row) => (
+        const brandName =
+          row.brand ||
+          row.name;
 
-        <button
-          onClick={() =>
-            toggleFavorite(row)
-          }
-          style={{
-            background: 'none',
-            border: 'none',
-            cursor: 'pointer',
-            fontSize: '20px',
-            color:
-              row.is_favorite
-                ? '#FF6B6B'
-                : '#ccc',
-            transition:
-              '0.2s ease',
-          }}
-        >
-          {row.is_favorite
-            ? '♥'
-            : '♡'}
-        </button>
-      ),
+        return (
+
+          <button
+            onClick={() =>
+              toggleFavorite(
+                brandName
+              )
+            }
+            style={{
+              border: 'none',
+              background:
+                'none',
+              cursor:
+                'pointer',
+              fontSize:
+                '24px',
+            }}
+          >
+            {row.isFavorite
+              ? '❤️'
+              : '🤍'}
+          </button>
+
+        );
+      },
     },
   ];
 
@@ -334,12 +338,30 @@ export default function Brand() {
   const filtered =
     brands.filter((b) =>
 
-      b.name
+      (
+        b.brand ||
+        b.name
+      )
         ?.toLowerCase()
         .includes(
           search.toLowerCase()
         )
     );
+
+  // ================= PAGINATION =================
+  const {
+
+    currentPage,
+    totalItems:
+      totalFiltered,
+
+    currentItems,
+    onPageChange,
+
+  } = usePagination(
+    filtered,
+    10
+  );
 
   // ================= LOADING =================
   if (loading) {
@@ -348,51 +370,21 @@ export default function Brand() {
 
       <div className="page">
 
-        <div className="page__header">
+        <h1 className="page__title">
+          Brands
+        </h1>
 
-          <h1 className="page__title">
-            Brands
-          </h1>
-
-        </div>
-
-        <p
+        <div
           style={{
-            padding: '20px',
-            textAlign: 'center',
+            marginTop:
+              '24px',
           }}
         >
-          Loading brands...
-        </p>
-
-      </div>
-    );
-  }
-
-  // ================= ERROR =================
-  if (error) {
-
-    return (
-
-      <div className="page">
-
-        <div className="page__header">
-
-          <h1 className="page__title">
-            Brands
-          </h1>
-
+          <LoadingSkeleton
+            rows={5}
+            columns={6}
+          />
         </div>
-
-        <p
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-            color: '#ff6b6b',
-          }}
-        >
-          {error}
-        </p>
 
       </div>
     );
@@ -422,7 +414,7 @@ export default function Brand() {
 
       </div>
 
-      {/* TOOLBAR */}
+      {/* SEARCH */}
       <div className="toolbar">
 
         <Input
@@ -430,80 +422,144 @@ export default function Brand() {
           placeholder="Search brands..."
           value={search}
           onChange={(e) =>
-            setSearch(e.target.value)
+            setSearch(
+              e.target.value
+            )
           }
         />
 
       </div>
 
-      {/* TABLE */}
-      <Table
-        columns={COLUMNS}
-        rows={filtered}
-      />
+      {/* TABLE OR EMPTY STATE */}
+      {totalFiltered === 0 ? (
+        <EmptyState
+          icon="🏷️"
+          title="No brands found"
+          description={search ? `No brands matching "${search}"` : 'No brands available'}
+        />
+      ) : (
+        <>
+          <EnhancedTable
+            columns={COLUMNS}
+            rows={currentLayout === 'tile' ? filtered : currentItems}
+            enableSelection={true}
+            enableEditing={true}
+            enableSorting={true}
+            enableColumnToggle={true}
+            onRowSelect={handleRowSelect}
+            onEdit={handleEdit}
+            defaultLayout="table"
+            onLayoutChange={setCurrentLayout}
+          />
+
+          {/* PAGINATION - Only show in table view */}
+          {currentLayout === 'table' && (
+            <Pagination
+              currentPage={
+                currentPage
+              }
+              totalItems={
+                totalFiltered
+              }
+              itemsPerPage={10}
+              onPageChange={
+                onPageChange
+              }
+            />
+          )}
+        </>
+      )}
 
       {/* MODAL */}
       {modalOpen && (
 
         <div
           style={{
-            position: 'fixed',
+            position:
+              'fixed',
             inset: 0,
             background:
               'rgba(0,0,0,0.5)',
-            display: 'flex',
+            display:
+              'flex',
             justifyContent:
               'center',
-            alignItems: 'center',
+            alignItems:
+              'center',
             zIndex: 999,
-            padding: '20px',
+            padding:
+              '20px',
           }}
         >
 
           <div
             style={{
               width: '100%',
-              maxWidth: '900px',
-              background: '#fff',
-              borderRadius: '12px',
-              padding: '24px',
-              maxHeight: '80vh',
-              overflow: 'auto',
+              maxWidth:
+                '1200px',
+              background:
+                '#fff',
+              borderRadius:
+                '12px',
+              padding:
+                '24px',
+              maxHeight:
+                '85vh',
+              overflow:
+                'auto',
             }}
           >
 
             {/* HEADER */}
             <div
               style={{
-                display: 'flex',
+                display:
+                  'flex',
                 justifyContent:
                   'space-between',
-                alignItems: 'center',
-                marginBottom: '20px',
+                alignItems:
+                  'center',
+                marginBottom:
+                  '20px',
               }}
             >
 
-              <h2
-                style={{
-                  fontSize: '24px',
-                  fontWeight: '700',
-                }}
-              >
-                {selectedBrand?.name}
-                {' '}
-                Items
-              </h2>
+              <div>
+
+                <h2>
+                  {
+                    selectedBrand
+                      ?.brand ||
+                    selectedBrand
+                      ?.name
+                  }
+                </h2>
+
+                <p>
+                  {
+                    brandItems.length
+                  }
+                  {' '}
+                  items found
+                </p>
+
+              </div>
 
               <button
                 onClick={() =>
-                  setModalOpen(false)
+                  setModalOpen(
+                    false
+                  )
                 }
                 style={{
-                  background: 'none',
-                  border: 'none',
-                  fontSize: '28px',
-                  cursor: 'pointer',
-                  color: '#666',
+                  border:
+                    'none',
+                  background:
+                    'none',
+                  fontSize:
+                    '28px',
+                  cursor:
+                    'pointer',
                 }}
               >
                 ×
@@ -511,225 +567,54 @@ export default function Brand() {
 
             </div>
 
-            {/* ITEMS COUNT */}
-            <p
-              style={{
-                marginBottom: '16px',
-                color: '#666',
-              }}
-            >
-              {brandItems.length}
-              {' '}
-              items found
-            </p>
+            {/* ITEMS TABLE */}
+            <EnhancedTable
+              columns={[
+                {
+                  key: 'code',
+                  label: 'CODE',
+                },
 
-            {/* LOADING */}
-            {itemsLoading ? (
+                {
+                  key: 'name',
+                  label:
+                    'ITEM NAME',
+                },
 
-              <div
-                style={{
-                  padding: '20px',
-                  textAlign: 'center',
-                }}
-              >
-                Loading items...
-              </div>
+                {
+                  key: 'product',
+                  label:
+                    'CATEGORY',
+                },
 
-            ) : brandItems.length === 0 ? (
+                {
+                  key: 'price',
 
-              <div
-                style={{
-                  padding: '20px',
-                  textAlign: 'center',
-                  color: '#999',
-                }}
-              >
-                No items found for
-                {' '}
-                {selectedBrand?.name}
-              </div>
+                  label:
+                    'PRICE',
 
-            ) : (
+                  align: 'right',
 
-              <Table
-                columns={[
-
-                  {
-                    key: 'image',
-                    label: 'IMAGE',
-                    render: (_, row) => (
-
-                      <div
-                        style={{
-                          width: '50px',
-                          height: '50px',
-                          background:
-                            '#f0f0f0',
-                          borderRadius:
-                            '6px',
-                          overflow:
-                            'hidden',
-                        }}
-                      >
-
-                        {row.url2 ? (
-
-                          <img
-                            src={
-                              row.url2
-                            }
-                            alt={
-                              row.name
-                            }
-                            style={{
-                              width:
-                                '100%',
-                              height:
-                                '100%',
-                              objectFit:
-                                'cover',
-                            }}
-                          />
-
-                        ) : (
-
-                          <div
-                            style={{
-                              width:
-                                '100%',
-                              height:
-                                '100%',
-                              display:
-                                'flex',
-                              justifyContent:
-                                'center',
-                              alignItems:
-                                'center',
-                              fontSize:
-                                '10px',
-                              color:
-                                '#999',
-                            }}
-                          >
-                            No Img
-                          </div>
-
-                        )}
-
-                      </div>
-                    ),
-                  },
-
-                  {
-                    key: 'code',
-                    label: 'CODE',
-                  },
-
-                  {
-                    key: 'name',
-                    label: 'NAME',
-                  },
-
-                  {
-                    key: 'price',
-                    label: 'PRICE',
-                    render: (val) =>
+                  render:
+                    (val) =>
                       `₹${val || 0}`,
-                  },
+                },
 
-                  {
-                    key: 'quantity',
-                    label: 'STOCK',
-                    render: (val) => (
+                {
+                  key:
+                    'quantity',
 
-                      <span
-                        style={{
-                          fontWeight:
-                            '600',
-                          color:
-                            val <= 0
-                              ? '#ef4444'
-                              : val <= 5
-                              ? '#f59e0b'
-                              : '#16a34a',
-                        }}
-                      >
-                        {val}
-                      </span>
-
-                    ),
-                  },
-
-                  {
-                    key: 'status',
-                    label: 'STATUS',
-                    render: (_, row) => {
-
-                      if (
-                        row.quantity <=
-                        0
-                      ) {
-
-                        return (
-
-                          <span
-                            style={{
-                              color:
-                                '#ef4444',
-                              fontWeight:
-                                '600',
-                            }}
-                          >
-                            Out of
-                            {' '}
-                            Stock
-                          </span>
-
-                        );
-                      }
-
-                      if (
-                        row.quantity <=
-                        5
-                      ) {
-
-                        return (
-
-                          <span
-                            style={{
-                              color:
-                                '#f59e0b',
-                              fontWeight:
-                                '600',
-                            }}
-                          >
-                            Low Stock
-                          </span>
-
-                        );
-                      }
-
-                      return (
-
-                        <span
-                          style={{
-                            color:
-                              '#16a34a',
-                            fontWeight:
-                              '600',
-                          }}
-                        >
-                          In Stock
-                        </span>
-
-                      );
-                    },
-                  },
-                ]}
-                rows={brandItems}
-              />
-
-            )}
+                  label:
+                    'STOCK',
+                },
+              ]}
+              rows={brandItems}
+              enableSelection={false}
+              enableEditing={false}
+              enableSorting={true}
+              enableColumnToggle={true}
+              defaultLayout="table"
+            />
 
           </div>
 

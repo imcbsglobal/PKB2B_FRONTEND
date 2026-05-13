@@ -1,16 +1,19 @@
-// src/pages/Item.jsx
-
 import React, {
   useState,
   useEffect,
 } from 'react';
 
-import Table from '../components/Table';
+import EnhancedTable from '../components/EnhancedTable';
 import Input from '../components/Input';
+import Pagination from '../components/Pagination';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
 
 import {
   productBatchAPI,
 } from '../Services/api';
+import { usePagination } from '../hooks/usePagination';
+import { useFetchData } from '../hooks/useFetchData';
 
 // ================= COLUMNS =================
 const COLUMNS = [
@@ -18,9 +21,8 @@ const COLUMNS = [
   // IMAGE
   {
     key: 'image',
-
     label: 'IMAGE',
-
+    sortable: false,
     render: (_, row) => (
 
       <div
@@ -38,6 +40,7 @@ const COLUMNS = [
           <img
             src={row.url2}
             alt={row.name}
+            loading="lazy"
             style={{
               width: '100%',
               height: '100%',
@@ -72,12 +75,14 @@ const COLUMNS = [
   {
     key: 'code',
     label: 'CODE',
+    editable: true,
   },
 
   // NAME
   {
     key: 'name',
     label: 'ITEM NAME',
+    editable: true,
   },
 
   // BRAND
@@ -95,19 +100,17 @@ const COLUMNS = [
   // PRICE
   {
     key: 'price',
-
     label: 'PRICE',
-
-    render: (val) =>
-      `₹${val || 0}`,
+    align: 'right',
+    editable: true,
+    render: (val) => `₹${val || 0}`,
   },
 
   // STOCK
   {
     key: 'quantity',
-
     label: 'STOCK',
-
+    editable: true,
     render: (val) => (
 
       <span
@@ -130,9 +133,8 @@ const COLUMNS = [
   // STATUS
   {
     key: 'status',
-
     label: 'STATUS',
-
+    sortable: false,
     render: (_, row) => {
 
       if (row.quantity <= 0) {
@@ -183,56 +185,32 @@ const COLUMNS = [
   },
 ];
 
-export default function Item() {
+export default function Item({ showToast }) {
 
   // ================= STATES =================
-  const [items, setItems] =
-    useState([]);
+  const [search, setSearch] = useState('');
+  const [selectedItems, setSelectedItems] = useState([]);
+  const [currentLayout, setCurrentLayout] = useState('table');
 
-  const [search, setSearch] =
-    useState('');
+  // ================= FETCH ITEMS WITH CACHE =================
+  const itemsResult = useFetchData(
+    'items',
+    () => productBatchAPI.getAllItems()
+  );
+  const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
+  const loading = itemsResult.loading;
 
-  const [loading, setLoading] =
-    useState(false);
-
-  // ================= FETCH ITEMS =================
-  const fetchItems = async () => {
-
-    try {
-
-      setLoading(true);
-
-      const response =
-        await productBatchAPI
-          .getAllItems();
-
-      console.log(
-        'Items:',
-        response.data
-      );
-
-      setItems(
-        response.data || []
-      );
-
-    } catch (error) {
-
-      console.error(
-        'Items API Error:',
-        error
-      );
-
-    } finally {
-
-      setLoading(false);
-    }
+  const handleEdit = (rowIdx, colKey, newValue) => {
+    console.log('Edit:', { rowIdx, colKey, newValue });
+    showToast?.(`Updated ${colKey} to ${newValue}`, 'success');
   };
 
-  useEffect(() => {
-
-    fetchItems();
-
-  }, []);
+  const handleRowSelect = (selected) => {
+    setSelectedItems(selected);
+    if (selected.length > 0) {
+      showToast?.(`${selected.length} items selected`, 'info');
+    }
+  };
 
   // ================= SEARCH =================
   const filtered =
@@ -256,6 +234,15 @@ export default function Item() {
           search.toLowerCase()
         )
     );
+
+  // ================= PAGINATION =================
+  const {
+    currentPage,
+    totalPages,
+    currentItems,
+    onPageChange,
+    totalItems: totalFiltered,
+  } = usePagination(filtered, 10);
 
   // ================= UI =================
   return (
@@ -296,21 +283,44 @@ export default function Item() {
       {/* LOADING */}
       {loading ? (
 
-        <div
-          style={{
-            padding: '20px',
-            textAlign: 'center',
-          }}
-        >
-          Loading items...
+        <div style={{ marginBottom: '24px' }}>
+          <LoadingSkeleton rows={5} columns={6} />
         </div>
+
+      ) : totalFiltered === 0 ? (
+
+        <EmptyState
+          icon="🛍️"
+          title="No items found"
+          description={search ? `No items matching "${search}"` : 'No items available'}
+        />
 
       ) : (
 
-        <Table
-          columns={COLUMNS}
-          rows={filtered}
-        />
+        <>
+          <EnhancedTable
+            columns={COLUMNS}
+            rows={currentLayout === 'tile' ? filtered : currentItems}
+            enableSelection={true}
+            enableEditing={true}
+            enableSorting={true}
+            enableColumnToggle={true}
+            onRowSelect={handleRowSelect}
+            onEdit={handleEdit}
+            defaultLayout="table"
+            onLayoutChange={setCurrentLayout}
+          />
+
+          {/* PAGINATION - Only show in table view */}
+          {currentLayout === 'table' && (
+            <Pagination
+              currentPage={currentPage}
+              totalItems={totalFiltered}
+              itemsPerPage={10}
+              onPageChange={onPageChange}
+            />
+          )}
+        </>
 
       )}
 
