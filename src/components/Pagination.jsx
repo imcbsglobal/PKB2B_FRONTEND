@@ -44,13 +44,8 @@ export default function Pagination({
   return (
     <div style={styles.container}>
       {/* Previous Button */}
-      <button
-        onClick={handlePrevious}
-        disabled={currentPage === 1}
-        style={{...styles.btn, ...( currentPage === 1 ? styles.btnDisabled : {})}}
-        aria-label="Previous page"
-      >
-        ← Prev
+      <button onClick={handlePrevious} disabled={currentPage === 1} style={{ ...styles.btn, ...(currentPage === 1 ? styles.btnDisabled : {}) }} aria-label="Previous page">
+        Prev
       </button>
 
       {/* First page + ellipsis */}
@@ -99,13 +94,8 @@ export default function Pagination({
       )}
 
       {/* Next Button */}
-      <button
-        onClick={handleNext}
-        disabled={currentPage >= totalPages}
-        style={{...styles.btn, ...(currentPage >= totalPages ? styles.btnDisabled : {})}}
-        aria-label="Next page"
-      >
-        Next →
+      <button onClick={handleNext} disabled={currentPage >= totalPages} style={{ ...styles.btn, ...(currentPage >= totalPages ? styles.btnDisabled : {}) }} aria-label="Next page">
+        Next
       </button>
 
       {/* Info text */}
@@ -128,34 +118,34 @@ const styles = {
   },
   btn: {
     padding: '8px 12px',
-    border: '1px solid #e5e7eb',
-    backgroundColor: '#ffffff',
-    color: '#374151',
-    borderRadius: '6px',
+    border: '1px solid var(--color-border)',
+    backgroundColor: 'var(--color-card)',
+    color: 'var(--color-fg)',
+    borderRadius: 'var(--radius)',
     cursor: 'pointer',
     fontSize: '14px',
     fontWeight: '500',
     transition: 'all 0.2s ease',
   },
   btnActive: {
-    backgroundColor: '#FFD700',
-    borderColor: '#FFD700',
-    color: '#1f2937',
+    backgroundColor: 'var(--color-primary)',
+    borderColor: 'var(--color-primary)',
+    color: 'var(--color-fg)',
     fontWeight: '600',
   },
   btnDisabled: {
-    backgroundColor: '#f3f4f6',
-    color: '#9ca3af',
+    backgroundColor: 'var(--color-muted)',
+    color: 'var(--color-muted-fg)',
     cursor: 'not-allowed',
     opacity: 0.6,
   },
   ellipsis: {
     padding: '0 4px',
-    color: '#9ca3af',
+    color: 'var(--color-muted-fg)',
   },
   info: {
     fontSize: '13px',
-    color: '#6b7280',
+    color: 'var(--color-muted-fg)',
     marginLeft: '16px',
   },
 };

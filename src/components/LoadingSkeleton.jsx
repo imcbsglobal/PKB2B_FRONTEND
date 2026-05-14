@@ -14,11 +14,11 @@ export default function LoadingSkeleton({ rows = 5, columns = 4 }) {
               <th key={i} style={{
                 padding: '16px',
                 textAlign: 'left',
-                borderBottom: '1px solid #eee',
+                borderBottom: '1px solid var(--color-border)',
               }}>
                 <div style={{
                   height: '16px',
-                  background: '#f0f0f0',
+                  background: 'var(--color-muted)',
                   borderRadius: '4px',
                   animation: 'pulse 2s infinite',
                 }} />
@@ -32,11 +32,11 @@ export default function LoadingSkeleton({ rows = 5, columns = 4 }) {
               {Array(columns).fill(0).map((_, colIdx) => (
                 <td key={colIdx} style={{
                   padding: '16px',
-                  borderBottom: '1px solid #f8f8f8',
+                  borderBottom: '1px solid var(--color-border)',
                 }}>
                   <div style={{
                     height: '14px',
-                    background: '#f5f5f5',
+                    background: 'var(--color-muted)',
                     borderRadius: '4px',
                     animation: 'pulse 2s infinite',
                   }} />

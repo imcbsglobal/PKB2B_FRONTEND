@@ -1,65 +1,153 @@
-import axios from 'axios';
 
 const API_BASE_URL =
   'https://pkb2backend.myimc.in/api';
 
-// ================= AXIOS CLIENT =================
-const apiClient = axios.create({
-  baseURL: API_BASE_URL,
+const buildUrl = (path) =>
+  `${API_BASE_URL}${path}`;
 
-  headers: {
-    'Content-Type':
-      'application/json',
-  },
-});
+const getAuthHeaders = () => {
+  const token = localStorage.getItem(
+    'access_token'
+  );
 
-// ================= REQUEST INTERCEPTOR =================
-apiClient.interceptors.request.use(
+  return token
+    ? { Authorization: `Bearer ${token}` }
+    : {};
+};
 
-  (config) => {
+const parseResponse = async (response) => {
+  const contentType =
+    response.headers.get(
+      'content-type'
+    ) || '';
 
-    const token =
-      localStorage.getItem(
-        'access_token'
-      );
+  const rawText =
+    await response.text();
 
-    if (token) {
+  let data = null;
 
-      config.headers.Authorization =
-        `Bearer ${token}`;
+  if (rawText) {
+    if (
+      contentType.includes(
+        'application/json'
+      )
+    ) {
+      try {
+        data = JSON.parse(rawText);
+      } catch {
+        data = rawText;
+      }
+    } else {
+      data = rawText;
     }
+  }
 
-    return config;
-  },
+  if (!response.ok) {
+    const error = new Error(
+      data?.detail ||
+        data?.error ||
+        response.statusText ||
+        'Request failed'
+    );
 
-  (error) =>
-    Promise.reject(error)
-);
+    error.response = {
+      status: response.status,
+      data,
+    };
 
-// ================= RESPONSE INTERCEPTOR =================
-apiClient.interceptors.response.use(
+    throw error;
+  }
 
-  (response) => response,
+  return {
+    data,
+    status: response.status,
+    headers: response.headers,
+    ok: response.ok,
+  };
+};
 
-  (error) => {
+const request = async (
+  path,
+  {
+    method = 'GET',
+    data,
+    headers = {},
+    isFormData = false,
+    includeAuthHeaders = true,
+  } = {}
+) => {
+  const requestHeaders = {
+    ...headers,
+  };
 
-    console.error(
-      'API Error:',
+  if (includeAuthHeaders) {
+    Object.assign(
+      requestHeaders,
+      getAuthHeaders()
+    );
+  }
+
+  if (
+    data !== undefined &&
+    !isFormData
+  ) {
+    requestHeaders['Content-Type'] =
+      'application/json';
+  }
+
+  try {
+    const response = await fetch(
+      buildUrl(path),
       {
-        status:
-          error.response?.status,
-
-        data:
-          error.response?.data,
-
-        message:
-          error.message,
+        method,
+        headers: requestHeaders,
+        body:
+          data === undefined
+            ? undefined
+            : isFormData
+              ? data
+              : JSON.stringify(data),
       }
     );
 
-    return Promise.reject(error);
+    return await parseResponse(
+      response
+    );
+  } catch (error) {
+    console.error('API Error:', {
+      status:
+        error.response?.status,
+
+      data:
+        error.response?.data,
+
+      message: error.message,
+    });
+
+    throw error;
   }
-);
+};
+
+const apiClient = {
+  get: (path, config = {}) =>
+    request(path, {
+      ...config,
+      method: 'GET',
+    }),
+
+  post: (path, data, config = {}) =>
+    request(path, {
+      ...config,
+      method: 'POST',
+      data,
+    }),
+
+  delete: (path, config = {}) =>
+    request(path, {
+      ...config,
+      method: 'DELETE',
+    }),
+};
 
 // ================= AUTH =================
 export const authAPI = {
@@ -71,6 +159,9 @@ export const authAPI = {
       {
         id,
         password,
+      },
+      {
+        includeAuthHeaders: false,
       }
     );
   },

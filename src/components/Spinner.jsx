@@ -1,6 +1,6 @@
 import React from 'react';
 
-export default function Spinner({ size = 'md', color = '#3b82f6' }) {
+export default function Spinner({ size = 'md', color = 'var(--color-primary)' }) {
   const sizes = {
     sm: '16px',
     md: '24px',
@@ -12,7 +12,7 @@ export default function Spinner({ size = 'md', color = '#3b82f6' }) {
       style={{
         width: sizes[size],
         height: sizes[size],
-        border: `3px solid rgba(0,0,0,0.1)`,
+        border: `3px solid oklch(0.24 0.012 256 / 0.1)`,
         borderTopColor: color,
         borderRadius: '50%',
         animation: 'spin 0.8s linear infinite',
@@ -33,7 +33,7 @@ export function FullPageSpinner({ message = 'Loading...' }) {
       style={{
         position: 'fixed',
         inset: 0,
-        background: 'rgba(255,255,255,0.9)',
+        background: 'oklch(0.985 0.002 247 / 0.9)',
         display: 'flex',
         flexDirection: 'column',
         alignItems: 'center',
@@ -43,7 +43,7 @@ export function FullPageSpinner({ message = 'Loading...' }) {
       }}
     >
       <Spinner size="lg" />
-      <p style={{ color: '#6b7280', fontSize: '14px' }}>{message}</p>
+      <p style={{ color: 'var(--color-muted-fg)', fontSize: '14px' }}>{message}</p>
     </div>
   );
 }

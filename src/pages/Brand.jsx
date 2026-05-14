@@ -1,627 +1,253 @@
-import React, {
-  useState,
-  useMemo,
-} from 'react';
+import React, { useMemo, useState } from 'react';
 
-import EnhancedTable from '../components/EnhancedTable';
 import Input from '../components/Input';
-import Pagination from '../components/Pagination';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
+import { brandAPI, productBatchAPI } from '../Services/api';
+import { useFetchData } from '../hooks/useFetchData';
 
-import {
-  brandAPI,
-  productBatchAPI,
-} from '../Services/api';
+function normalizeKey(value) {
+  return (value || '').trim().toLowerCase();
+}
 
-import {
-  usePagination,
-} from '../hooks/usePagination';
+function FavoriteButton({ active, onClick }) {
+  return (
+    <button type="button" className={`category-fav-btn ${active ? 'is-active' : ''}`} onClick={(e) => { e.stopPropagation(); onClick?.(e); }} aria-pressed={active} title={active ? 'Remove favorite' : 'Add favorite'}>
+      <svg width="18" height="18" viewBox="0 0 24 24" fill={active ? 'currentColor' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+    </button>
+  );
+}
 
-import {
-  useFetchData,
-} from '../hooks/useFetchData';
+function BrandCard({ brand, onToggleFavorite }) {
+  const name = brand.brand || brand.name;
+  const imageUrl = brand.url || brand.image;
+  return (
+    <article className="category-card">
+      <div className="category-card__media">
+        {imageUrl ? (
+          <img className="category-card__image" src={String(imageUrl).replace(/\\/g, '/')} alt={name || 'Brand'} loading="lazy" />
+        ) : (
+          <div className="category-card__empty">No Image</div>
+        )}
+        <FavoriteButton active={Boolean(brand.isFavorite)} onClick={() => onToggleFavorite(name)} />
+      </div>
+      <div className="category-card__body">
+        <h3 className="category-card__name">{name || 'N/A'}</h3>
+        <p className="category-card__count">{brand.itemCount || 0} items</p>
+      </div>
+    </article>
+  );
+}
+
+function BrandTable({ rows, onToggleFavorite, onOpenItems }) {
+  return (
+    <div className="table-wrap category-table-wrap">
+      <table className="data-table category-table">
+        <thead>
+          <tr>
+            <th>IMAGE</th>
+            <th>BRAND</th>
+            <th>ITEM COUNT</th>
+            <th>FAVORITE</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((brand) => {
+            const name = brand.brand || brand.name;
+            const imageUrl = brand.url || brand.image;
+            return (
+              <tr key={brand.id || name} onClick={() => onOpenItems?.(name)} style={{ cursor: onOpenItems ? 'pointer' : 'default' }}>
+                <td>
+                  <div className="item-thumb item-thumb--table">
+                    {imageUrl ? <img src={String(imageUrl).replace(/\\/g, '/')} alt={name || 'Brand'} loading="lazy" /> : <span>No Image</span>}
+                  </div>
+                </td>
+                <td className="category-table__name">{name || 'N/A'}</td>
+                <td>{brand.itemCount || 0}</td>
+                <td>
+                  <FavoriteButton active={Boolean(brand.isFavorite)} onClick={() => onToggleFavorite(name)} />
+                </td>
+              </tr>
+            );
+          })}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+function ToggleButton({ active, icon, label, onClick }) {
+  return (
+    <button className={`item-view-toggle ${active ? 'item-view-toggle--active' : ''}`} onClick={onClick} aria-label={label} title={label}>
+      {icon}
+    </button>
+  );
+}
 
 export default function Brands({ showToast }) {
-
-  // ================= STATES =================
-  const [search, setSearch] =
-    useState('');
-
-  const [selectedBrand,
-    setSelectedBrand] =
-    useState(null);
-
-  const [modalOpen,
-    setModalOpen] =
-    useState(false);
-
-  const [brandItems,
-    setBrandItems] =
-    useState([]);
-
-  const [selectedBrands, setSelectedBrands] = useState([]);
-  const [currentLayout, setCurrentLayout] = useState('table');
-
-  // ================= FETCH DATA =================
-  const brandsResult =
-    useFetchData(
-      'brands',
-      () => brandAPI.getAllBrands()
-    );
-
-  const itemsResult =
-    useFetchData(
-      'items',
-      () => productBatchAPI.getAllItems()
-    );
-
-  const loading =
-    brandsResult.loading ||
-    itemsResult.loading;
-
-  const items = useMemo(
-    () => Array.isArray(itemsResult.data) ? itemsResult.data : [],
-    [itemsResult.data]
-  );
-
-  // ================= PROCESS BRANDS =================
-  // Build a brand→count map once (O(n)) instead of nested filter per brand (O(n×m))
+  const [search, setSearch] = useState('');
+  const [layout, setLayout] = useState('grid');
   const [favoriteOverrides, setFavoriteOverrides] = useState({});
+  const [selectedBrand, setSelectedBrand] = useState(null);
+
+  const brandsResult = useFetchData('brands', () => brandAPI.getAllBrands());
+  const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
+
+  const loading = brandsResult.loading || itemsResult.loading;
+  const allItems = useMemo(() => Array.isArray(itemsResult.data) ? itemsResult.data : [], [itemsResult.data]);
 
   const brands = useMemo(() => {
     const brandsData = Array.isArray(brandsResult.data) ? brandsResult.data : [];
+    const countMap = allItems.reduce((acc, item) => {
+      const key = normalizeKey(item.brand);
+      if (key) acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {});
 
-    const countMap = {};
-    items.forEach(item => {
-      const key = (item.brand || '').trim().toLowerCase();
-      countMap[key] = (countMap[key] || 0) + 1;
-    });
-
-    return brandsData.map(brand => {
-      const brandKey = (brand.brand || brand.name || '').trim().toLowerCase();
+    return brandsData.map((brand) => {
+      const key = normalizeKey(brand.brand || brand.name);
       return {
         ...brand,
-        itemCount: countMap[brandKey] || 0,
-        isFavorite: favoriteOverrides[brandKey] ?? brand.is_favorite ?? false,
+        itemCount: countMap[key] || 0,
+        isFavorite: favoriteOverrides[key] ?? brand.is_favorite ?? false,
       };
     });
-  }, [brandsResult.data, items, favoriteOverrides]);
+  }, [brandsResult.data, allItems, favoriteOverrides]);
 
-  const handleEdit = (rowIdx, colKey, newValue) => {
-    console.log('Edit:', { rowIdx, colKey, newValue });
-    showToast?.(`Updated ${colKey} to ${newValue}`, 'success');
+  const filteredBrands = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    if (!term) return brands;
+    return brands.filter((b) => (b.brand || b.name || '').toLowerCase().includes(term));
+  }, [brands, search]);
+
+  const openBrandItems = (brandName) => {
+    setSelectedBrand(brandName);
   };
 
-  const handleRowSelect = (selected) => {
-    setSelectedBrands(selected);
-    if (selected.length > 0) {
-      showToast?.(`${selected.length} brands selected`, 'info');
-    }
-  };
+  const closeBrandModal = () => setSelectedBrand(null);
 
-  // ================= OPEN BRAND =================
-  const handleBrandClick = (
-    brand
-  ) => {
+  const itemsForSelectedBrand = useMemo(() => {
+    if (!selectedBrand) return [];
+    const key = normalizeKey(selectedBrand);
+    return allItems.filter((it) => normalizeKey(it.brand) === key);
+  }, [selectedBrand, allItems]);
 
-    setSelectedBrand(
-      brand
-    );
-
-    const brandName =
-      (
-        brand.brand ||
-        brand.name ||
-        ''
-      )
-        .trim()
-        .toLowerCase();
-
-    // FILTER ITEMS
-    const filteredItems =
-      items.filter((item) => {
-
-        const itemBrand =
-          (
-            item.brand || ''
-          )
-            .trim()
-            .toLowerCase();
-
-        return (
-          itemBrand ===
-          brandName
-        );
-      });
-
-    setBrandItems(
-      filteredItems
-    );
-
-    setModalOpen(true);
-  };
-
-  // ================= TOGGLE FAVORITE =================
   const toggleFavorite = async (brandName) => {
-    const key = brandName.trim().toLowerCase();
-    const current = brands.find(b => (b.brand || b.name || '').trim().toLowerCase() === key);
-    setFavoriteOverrides(prev => ({ ...prev, [key]: !current?.isFavorite }));
+    const key = normalizeKey(brandName);
+    const current = brands.find((b) => normalizeKey(b.brand || b.name) === key);
+    setFavoriteOverrides((prev) => ({ ...prev, [key]: !current?.isFavorite }));
     try {
       const response = await brandAPI.toggleBrandFavorite(brandName);
       const isFavorite = response.data?.is_favorite;
-      setFavoriteOverrides(prev => ({ ...prev, [key]: isFavorite }));
+      setFavoriteOverrides((prev) => ({ ...prev, [key]: isFavorite }));
       showToast?.(isFavorite ? 'Added to favorites' : 'Removed from favorites', 'success');
     } catch (err) {
-      setFavoriteOverrides(prev => ({ ...prev, [key]: current?.isFavorite }));
+      setFavoriteOverrides((prev) => ({ ...prev, [key]: current?.isFavorite }));
       console.error('Favorite Error:', err);
       showToast?.('Failed to update favorite', 'error');
     }
   };
 
-  // ================= COLUMNS =================
-  const COLUMNS = [
-
-    // IMAGE
-    {
-      key: 'image',
-      label: 'IMAGE',
-      sortable: false,
-      render: (_, row) => (
-
-        <div
-          style={{
-            width: '70px',
-            height: '70px',
-            borderRadius: '10px',
-            overflow: 'hidden',
-            background:
-              '#f3f4f6',
-          }}
-        >
-
-          {row.url ||
-          row.image ? (
-
-            <img
-              src={
-                row.url ||
-                row.image
-              }
-              alt={
-                row.brand ||
-                row.name
-              }
-              loading="lazy"
-              style={{
-                width: '100%',
-                height: '100%',
-                objectFit:
-                  'cover',
-              }}
-            />
-
-          ) : (
-
-            <div
-              style={{
-                width: '100%',
-                height: '100%',
-                display:
-                  'flex',
-                justifyContent:
-                  'center',
-                alignItems:
-                  'center',
-                fontSize:
-                  '12px',
-                color:
-                  '#999',
-              }}
-            >
-              No Image
-            </div>
-
-          )}
-
-        </div>
-      ),
-    },
-
-    // BRAND
-    {
-      key: 'brand',
-      label: 'BRAND',
-      editable: true,
-      render: (_, row) => (
-
-        <button
-          onClick={() =>
-            handleBrandClick(
-              row
-            )
-          }
-          style={{
-            background:
-              'none',
-            border: 'none',
-            cursor:
-              'pointer',
-            color:
-              '#2563eb',
-            textDecoration:
-              'underline',
-            fontWeight:
-              '600',
-            fontSize:
-              '14px',
-          }}
-        >
-          {
-            row.brand ||
-            row.name
-          }
-        </button>
-
-      ),
-    },
-
-    // ITEM COUNT
-    {
-      key: 'itemCount',
-
-      label: 'ITEMS',
-
-      align: 'center',
-
-      render: (val) => (
-
-        <span
-          style={{
-            background:
-              '#f3f4f6',
-            padding:
-              '6px 12px',
-            borderRadius:
-              '20px',
-            fontWeight:
-              '600',
-          }}
-        >
-          {val || 0}
-        </span>
-
-      ),
-    },
-
-    // FAVORITE
-    {
-      key: 'favorite',
-      label: 'FAVORITE',
-      align: 'center',
-      sortable: false,
-      render: (_, row) => {
-
-        const brandName =
-          row.brand ||
-          row.name;
-
-        return (
-
-          <button
-            onClick={() =>
-              toggleFavorite(
-                brandName
-              )
-            }
-            style={{
-              border: 'none',
-              background:
-                'none',
-              cursor:
-                'pointer',
-              fontSize:
-                '24px',
-            }}
-          >
-            {row.isFavorite
-              ? '❤️'
-              : '🤍'}
-          </button>
-
-        );
-      },
-    },
-  ];
-
-  // ================= SEARCH =================
-  const filtered =
-    brands.filter((b) =>
-
-      (
-        b.brand ||
-        b.name
-      )
-        ?.toLowerCase()
-        .includes(
-          search.toLowerCase()
-        )
-    );
-
-  // ================= PAGINATION =================
-  const {
-
-    currentPage,
-    totalItems:
-      totalFiltered,
-
-    currentItems,
-    onPageChange,
-
-  } = usePagination(
-    filtered,
-    10
-  );
-
-  // ================= LOADING =================
-  if (loading) {
-
-    return (
-
-      <div className="page">
-
-        <h1 className="page__title">
-          Brands
-        </h1>
-
-        <div
-          style={{
-            marginTop:
-              '24px',
-          }}
-        >
-          <LoadingSkeleton
-            rows={5}
-            columns={6}
-          />
-        </div>
-
-      </div>
-    );
-  }
-
-  // ================= UI =================
   return (
-
-    <div className="page">
-
-      {/* HEADER */}
-      <div className="page__header">
-
-        <div>
-
-          <h1 className="page__title">
-            Brands
-          </h1>
-
-          <p className="page__sub">
-            {filtered.length}
-            {' '}
-            brands found
-          </p>
-
+    <div className="page category-page">
+      <div className="item-toolbar category-toolbar">
+        <div className="item-toolbar__left category-toolbar__left">
+          <Input className="item-toolbar__search" placeholder="Search brand..." value={search} onChange={(e) => setSearch(e.target.value)} />
         </div>
 
-      </div>
-
-      {/* SEARCH */}
-      <div className="toolbar">
-
-        <Input
-          className="toolbar__search"
-          placeholder="Search brands..."
-          value={search}
-          onChange={(e) =>
-            setSearch(
-              e.target.value
-            )
-          }
-        />
-
-      </div>
-
-      {/* TABLE OR EMPTY STATE */}
-      {totalFiltered === 0 ? (
-        <EmptyState
-          icon="🏷️"
-          title="No brands found"
-          description={search ? `No brands matching "${search}"` : 'No brands available'}
-        />
-      ) : (
-        <>
-          <EnhancedTable
-            columns={COLUMNS}
-            rows={currentLayout === 'tile' ? filtered : currentItems}
-            enableSelection={true}
-            enableEditing={true}
-            enableSorting={true}
-            enableColumnToggle={true}
-            onRowSelect={handleRowSelect}
-            onEdit={handleEdit}
-            defaultLayout="table"
-            onLayoutChange={setCurrentLayout}
-          />
-
-          {/* PAGINATION - Only show in table view */}
-          {currentLayout === 'table' && (
-            <Pagination
-              currentPage={
-                currentPage
-              }
-              totalItems={
-                totalFiltered
-              }
-              itemsPerPage={10}
-              onPageChange={
-                onPageChange
+        <div className="item-toolbar__right">
+          <div className="item-view-switch" aria-label="View mode">
+            <ToggleButton
+              active={layout === 'grid'}
+              label="Grid view"
+              onClick={() => setLayout('grid')}
+              icon={
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <rect x="3" y="3" width="7" height="7" />
+                  <rect x="14" y="3" width="7" height="7" />
+                  <rect x="3" y="14" width="7" height="7" />
+                  <rect x="14" y="14" width="7" height="7" />
+                </svg>
               }
             />
-          )}
-        </>
+            <ToggleButton
+              active={layout === 'table'}
+              label="Table view"
+              onClick={() => setLayout('table')}
+              icon={
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                  <line x1="8" y1="6" x2="21" y2="6" />
+                  <line x1="8" y1="12" x2="21" y2="12" />
+                  <line x1="8" y1="18" x2="21" y2="18" />
+                  <line x1="3" y1="6" x2="3" y2="6" />
+                  <line x1="3" y1="12" x2="3" y2="12" />
+                  <line x1="3" y1="18" x2="3" y2="18" />
+                </svg>
+              }
+            />
+          </div>
+        </div>
+      </div>
+
+      {loading ? (
+        <div className="item-loading-wrap">
+          <LoadingSkeleton rows={5} columns={4} />
+        </div>
+      ) : filteredBrands.length === 0 ? (
+        <EmptyState icon="🏷️" title="No brands found" description={search ? `No brands matching "${search}"` : 'No brands available'} />
+      ) : layout === 'grid' ? (
+        <div className="category-grid">
+          {filteredBrands.map((brand) => {
+            const name = brand.brand || brand.name;
+            return (
+              <div key={brand.id || name} onClick={() => openBrandItems(name)} style={{ cursor: 'pointer' }}>
+                <BrandCard brand={brand} onToggleFavorite={toggleFavorite} />
+              </div>
+            );
+          })}
+        </div>
+      ) : (
+        <BrandTable rows={filteredBrands} onToggleFavorite={toggleFavorite} onOpenItems={openBrandItems} />
       )}
 
-      {/* MODAL */}
-      {modalOpen && (
-
-        <div
-          style={{
-            position:
-              'fixed',
-            inset: 0,
-            background:
-              'rgba(0,0,0,0.5)',
-            display:
-              'flex',
-            justifyContent:
-              'center',
-            alignItems:
-              'center',
-            zIndex: 999,
-            padding:
-              '20px',
-          }}
-        >
-
-          <div
-            style={{
-              width: '100%',
-              maxWidth:
-                '1200px',
-              background:
-                '#fff',
-              borderRadius:
-                '12px',
-              padding:
-                '24px',
-              maxHeight:
-                '85vh',
-              overflow:
-                'auto',
-            }}
-          >
-
-            {/* HEADER */}
-            <div
-              style={{
-                display:
-                  'flex',
-                justifyContent:
-                  'space-between',
-                alignItems:
-                  'center',
-                marginBottom:
-                  '20px',
-              }}
-            >
-
-              <div>
-
-                <h2>
-                  {
-                    selectedBrand
-                      ?.brand ||
-                    selectedBrand
-                      ?.name
-                  }
-                </h2>
-
-                <p>
-                  {
-                    brandItems.length
-                  }
-                  {' '}
-                  items found
-                </p>
-
-              </div>
-
-              <button
-                onClick={() =>
-                  setModalOpen(
-                    false
-                  )
-                }
-                style={{
-                  border:
-                    'none',
-                  background:
-                    'none',
-                  fontSize:
-                    '28px',
-                  cursor:
-                    'pointer',
-                }}
-              >
-                ×
-              </button>
-
+      {selectedBrand && (
+        <div style={{ position: 'fixed', inset: 0, background: 'rgba(0,0,0,0.45)', zIndex: 999, display: 'flex', justifyContent: 'center', alignItems: 'center', padding: 20 }} onClick={closeBrandModal}>
+          <div style={{ width: '100%', maxWidth: 900, maxHeight: '90vh', overflowY: 'auto', background: '#fff', borderRadius: 12, padding: 20 }} onClick={(e) => e.stopPropagation()}>
+            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', marginBottom: 12 }}>
+              <h3 style={{ margin: 0 }}>{selectedBrand}</h3>
+              <button onClick={closeBrandModal} style={{ border: 'none', background: 'none', fontSize: 22, cursor: 'pointer' }}>×</button>
             </div>
 
-            {/* ITEMS TABLE */}
-            <EnhancedTable
-              columns={[
-                {
-                  key: 'code',
-                  label: 'CODE',
-                },
-
-                {
-                  key: 'name',
-                  label:
-                    'ITEM NAME',
-                },
-
-                {
-                  key: 'product',
-                  label:
-                    'CATEGORY',
-                },
-
-                {
-                  key: 'price',
-
-                  label:
-                    'PRICE',
-
-                  align: 'right',
-
-                  render:
-                    (val) =>
-                      `₹${val || 0}`,
-                },
-
-                {
-                  key:
-                    'quantity',
-
-                  label:
-                    'STOCK',
-                },
-              ]}
-              rows={brandItems}
-              enableSelection={false}
-              enableEditing={false}
-              enableSorting={true}
-              enableColumnToggle={true}
-              defaultLayout="table"
-            />
-
+            {itemsForSelectedBrand.length === 0 ? (
+              <div>No items for this brand</div>
+            ) : (
+              <div style={{ display: 'grid', gap: 12, gridTemplateColumns: 'repeat(auto-fill, minmax(240px, 1fr))' }}>
+                {itemsForSelectedBrand.map((it) => (
+                  <div key={it.id || it.code} style={{ display: 'flex', gap: 12, alignItems: 'center', padding: 12, border: '1px solid #eee', borderRadius: 8 }}>
+                    <div style={{ width: 56, height: 56, flex: '0 0 56px' }}>
+                      {it.url || it.url2 ? (
+                        <img src={(it.url || it.url2).replace(/\\/g, '/')} alt={it.name || it.item_name || ''} style={{ width: '100%', height: '100%', objectFit: 'cover', borderRadius: 6 }} />
+                      ) : (
+                        <div style={{ width: '100%', height: '100%', background: '#f5f5f5', borderRadius: 6, display: 'flex', alignItems: 'center', justifyContent: 'center', color: '#999', fontSize: 12 }}>No Image</div>
+                      )}
+                    </div>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ fontWeight: 700 }}>{it.name || it.item_name || 'N/A'}</div>
+                      <div style={{ fontSize: 12, color: '#666' }}>{it.code || it.item_code || it.barcode || ''}</div>
+                    </div>
+                    <div style={{ textAlign: 'right', minWidth: 96 }}>
+                      <div style={{ fontWeight: 700 }}>₹ {Number(it.price || it.rate || 0).toLocaleString('en-IN')}</div>
+                      <div style={{ fontSize: 12, color: '#666' }}>Stock: {it.quantity ?? 0}</div>
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
-
         </div>
-
       )}
-
     </div>
   );
 }

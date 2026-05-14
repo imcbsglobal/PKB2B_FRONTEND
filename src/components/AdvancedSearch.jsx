@@ -6,7 +6,7 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
   const [values, setValues] = useState({});
 
   const handleChange = (key, value) => {
-    setValues(prev => ({ ...prev, [key]: value }));
+    setValues((prev) => ({ ...prev, [key]: value }));
   };
 
   const handleApply = () => {
@@ -19,7 +19,7 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
     onSearch({});
   };
 
-  const activeFilters = Object.keys(values).filter(k => values[k]).length;
+  const activeFilters = Object.keys(values).filter((key) => values[key]).length;
 
   return (
     <div style={{ position: 'relative' }}>
@@ -27,9 +27,9 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
         onClick={() => setIsOpen(!isOpen)}
         style={{
           padding: '8px 16px',
-          background: activeFilters > 0 ? '#3b82f6' : '#fff',
-          color: activeFilters > 0 ? '#fff' : '#374151',
-          border: '1px solid #d1d5db',
+          background: activeFilters > 0 ? 'var(--color-primary)' : 'var(--color-card)',
+          color: 'var(--color-fg)',
+          border: '1px solid var(--color-border)',
           borderRadius: '6px',
           fontSize: '14px',
           fontWeight: '500',
@@ -43,14 +43,16 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
         <span>🔍</span>
         <span>Advanced Search</span>
         {activeFilters > 0 && (
-          <span style={{
-            background: '#fff',
-            color: '#3b82f6',
-            borderRadius: '12px',
-            padding: '2px 8px',
-            fontSize: '12px',
-            fontWeight: '600',
-          }}>
+          <span
+            style={{
+              background: 'var(--color-card)',
+              color: 'var(--color-primary)',
+              borderRadius: '12px',
+              padding: '2px 8px',
+              fontSize: '12px',
+              fontWeight: '600',
+            }}
+          >
             {activeFilters}
           </span>
         )}
@@ -71,10 +73,9 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
               position: 'absolute',
               top: 'calc(100% + 8px)',
               right: 0,
-              background: '#fff',
-              border: '1px solid #e5e7eb',
+              background: 'var(--color-card)',
+              border: '1px solid var(--color-border)',
               borderRadius: '8px',
-              boxShadow: '0 4px 12px rgba(0,0,0,0.1)',
               padding: '20px',
               minWidth: '320px',
               zIndex: 999,
@@ -85,18 +86,20 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
             </h3>
 
             <div style={{ display: 'flex', flexDirection: 'column', gap: '16px' }}>
-              {filters.map(filter => (
+              {filters.map((filter) => (
                 <div key={filter.key}>
-                  <label style={{
-                    display: 'block',
-                    fontSize: '13px',
-                    fontWeight: '500',
-                    color: '#6b7280',
-                    marginBottom: '6px',
-                  }}>
+                  <label
+                    style={{
+                      display: 'block',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      color: 'var(--color-muted-fg)',
+                      marginBottom: '6px',
+                    }}
+                  >
                     {filter.label}
                   </label>
-                  
+
                   {filter.type === 'select' ? (
                     <select
                       value={values[filter.key] || ''}
@@ -104,13 +107,13 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '6px',
                         fontSize: '14px',
                       }}
                     >
                       <option value="">All</option>
-                      {filter.options?.map(opt => (
+                      {filter.options?.map((opt) => (
                         <option key={opt.value} value={opt.value}>
                           {opt.label}
                         </option>
@@ -124,7 +127,7 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '6px',
                         fontSize: '14px',
                       }}
@@ -138,7 +141,7 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
                       style={{
                         width: '100%',
                         padding: '8px 12px',
-                        border: '1px solid #d1d5db',
+                        border: '1px solid var(--color-border)',
                         borderRadius: '6px',
                         fontSize: '14px',
                       }}
@@ -149,38 +152,12 @@ export default function AdvancedSearch({ onSearch, filters = [] }) {
             </div>
 
             <div style={{ display: 'flex', gap: '8px', marginTop: '20px' }}>
-              <button
-                onClick={handleApply}
-                style={{
-                  flex: 1,
-                  padding: '8px 16px',
-                  background: '#3b82f6',
-                  color: '#fff',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}
-              >
+              <Button variant="primary" size="sm" fullWidth onClick={handleApply}>
                 Apply
-              </button>
-              <button
-                onClick={handleClear}
-                style={{
-                  flex: 1,
-                  padding: '8px 16px',
-                  background: '#f3f4f6',
-                  color: '#374151',
-                  border: 'none',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontWeight: '500',
-                  cursor: 'pointer',
-                }}
-              >
+              </Button>
+              <Button variant="outline" size="sm" fullWidth onClick={handleClear}>
                 Clear
-              </button>
+              </Button>
             </div>
           </div>
         </>

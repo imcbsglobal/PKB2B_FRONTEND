@@ -179,9 +179,9 @@ export default function Dashboard() {
         <div className="dash-stat-grid">
           {Array(4).fill(0).map((_, i) => (
             <div className="dash-stat-card" key={i}>
-              <div style={{ height: '16px', background: '#f0f0f0', borderRadius: '4px', marginBottom: '8px' }} />
-              <div style={{ height: '24px', background: '#f0f0f0', borderRadius: '4px', marginBottom: '8px' }} />
-              <div style={{ height: '12px', background: '#f5f5f5', borderRadius: '4px' }} />
+              <div style={{ height: '16px', background: 'var(--color-muted)', borderRadius: '4px', marginBottom: '8px' }} />
+              <div style={{ height: '24px', background: 'var(--color-muted)', borderRadius: '4px', marginBottom: '8px' }} />
+              <div style={{ height: '12px', background: 'var(--color-muted)', borderRadius: '4px' }} />
             </div>
           ))}
         </div>
@@ -287,14 +287,14 @@ export default function Dashboard() {
                   .sort((a, b) => (a.quantity || 0) - (b.quantity || 0))
                   .slice(0, 10)
                   .map((item, idx) => {
-                    let statusColor = '#16a34a';
+                    let statusColor = 'var(--color-success)';
                     let statusText = 'In Stock';
                     
                     if ((item.quantity || 0) <= 0) {
-                      statusColor = '#ef4444';
+                      statusColor = 'var(--color-destructive)';
                       statusText = 'Out of Stock';
                     } else if ((item.quantity || 0) <= 5) {
-                      statusColor = '#f59e0b';
+                      statusColor = 'var(--color-warning)';
                       statusText = 'Low Stock';
                     }
                     
@@ -318,7 +318,7 @@ export default function Dashboard() {
                   })
               ) : (
                 <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: '#999' }}>
+                  <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-muted-fg)' }}>
                     No items found
                   </td>
                 </tr>

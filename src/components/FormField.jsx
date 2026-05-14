@@ -16,12 +16,12 @@ export default function FormField({
             display: 'block',
             fontSize: '14px',
             fontWeight: '600',
-            color: '#374151',
+            color: 'var(--color-fg)',
             marginBottom: '6px',
           }}
         >
           {label}
-          {required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+          {required && <span style={{ color: 'var(--color-destructive)', marginLeft: '4px' }}>*</span>}
         </label>
       )}
       
@@ -38,8 +38,8 @@ export default function FormField({
               fontSize: '18px',
             }}
           >
-            {error && <span style={{ color: '#ef4444' }}>✕</span>}
-            {success && <span style={{ color: '#10b981' }}>✓</span>}
+            {error && <span style={{ color: 'var(--color-destructive)' }}>✕</span>}
+            {success && <span style={{ color: 'var(--color-success)' }}>✓</span>}
           </div>
         )}
       </div>
@@ -49,13 +49,13 @@ export default function FormField({
           style={{
             marginTop: '6px',
             fontSize: '13px',
-            color: '#ef4444',
+            color: 'var(--color-destructive)',
             display: 'flex',
             alignItems: 'center',
             gap: '4px',
           }}
         >
-          <span>⚠</span> {error}
+          <span>!</span> {error}
         </p>
       )}
 
@@ -64,7 +64,7 @@ export default function FormField({
           style={{
             marginTop: '6px',
             fontSize: '13px',
-            color: '#6b7280',
+            color: 'var(--color-muted-fg)',
           }}
         >
           {helperText}

@@ -9,10 +9,10 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
   }, [duration, onClose]);
 
   const colors = {
-    success: { bg: '#10b981', icon: '✓' },
-    error: { bg: '#ef4444', icon: '✕' },
-    warning: { bg: '#f59e0b', icon: '⚠' },
-    info: { bg: '#3b82f6', icon: 'ℹ' },
+    success: { bg: 'var(--color-success)', icon: '✓' },
+    error: { bg: 'var(--color-destructive)', icon: '✕' },
+    warning: { bg: 'var(--color-warning)', icon: '⚠' },
+    info: { bg: 'var(--color-primary)', icon: 'ℹ' },
   };
 
   const { bg, icon } = colors[type] || colors.info;
@@ -24,10 +24,10 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
         top: '20px',
         right: '20px',
         background: bg,
-        color: '#fff',
+        color: 'var(--color-fg)',
         padding: '16px 24px',
         borderRadius: '8px',
-        boxShadow: '0 4px 12px rgba(0,0,0,0.15)',
+        border: '1px solid oklch(0.24 0.012 256 / 0.08)',
         display: 'flex',
         alignItems: 'center',
         gap: '12px',
@@ -43,7 +43,7 @@ export default function Toast({ message, type = 'info', onClose, duration = 3000
         style={{
           background: 'rgba(255,255,255,0.2)',
           border: 'none',
-          color: '#fff',
+          color: 'var(--color-fg)',
           width: '24px',
           height: '24px',
           borderRadius: '50%',

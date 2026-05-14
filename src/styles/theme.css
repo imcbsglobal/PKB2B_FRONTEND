@@ -1,9 +1,6 @@
 /* ═══════════════════════════════════════════════════════════
-   PEEKAY — GLOBAL DESIGN TOKENS
-   Import order: theme.css → components.css → layout.css
-   ═══════════════════════════════════════════════════════════ */
-
-@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&family=Poppins:wght@300;400;500;600;700;800&display=swap');
+  PEEKAY — GLOBAL DESIGN TOKENS
+  ═══════════════════════════════════════════════════════════ */
 
 /* ── Reset ─────────────────────────────────────────────── */
 *, *::before, *::after { margin: 0; padding: 0; box-sizing: border-box; }
@@ -14,41 +11,43 @@ button, input, select, textarea { font: inherit; }
 /* ── CSS Custom Properties (OKLCH) ─────────────────────── */
 :root {
   /* --- Palette --- */
-  --color-bg:             oklch(1 0 0);            /* pure white canvas          */
-  --color-fg:             oklch(0.24  0.012 250);  /* deep slate ink             */
-  --color-card:           oklch(1     0     0);    /* pure white card            */
-  --color-primary:        oklch(0.82  0.16  85);   /* signal yellow — Peekay CTA */
-  --color-primary-hover:  oklch(0.75  0.16  85);   /* darker yellow on hover     */
-  --color-primary-ring:   oklch(0.82  0.16  85 / 0.30);
-  --color-accent:         oklch(0.93  0.10  90);   /* soft yellow tint           */
-  --color-secondary:      oklch(1     0     0);    /* pure white surface         */
-  --color-secondary-fg:   oklch(0.955 0.006 90);
-  --color-muted:          oklch(1     0     0);    /* pure white muted surface   */
-  --color-muted-fg:       oklch(0.50  0.012 250);
-  --color-border:         oklch(0.92  0.008 90);   /* light gray border          */
-  --color-input:          oklch(0.98  0.008 90);   /* off-white input background */
-  --color-destructive:    oklch(0.58  0.22  25);   /* red                        */
+  --color-bg:             oklch(0.985 0.002 247);
+  --color-fg:             oklch(0.22 0.012 256);
+  --color-card:           oklch(1 0 0);
+  --color-primary:        oklch(0.82 0.16 86);
+  --color-primary-hover:  oklch(0.76 0.16 86);
+  --color-primary-ring:   oklch(0.82 0.16 86 / 0.28);
+  --color-accent:         oklch(0.94 0.05 86);
+  --color-secondary:      oklch(0.965 0.004 247);
+  --color-secondary-fg:   oklch(0.4 0.012 256);
+  --color-muted:          oklch(0.96 0.004 247);
+  --color-muted-fg:       oklch(0.52 0.012 256);
+  --color-border:         oklch(0.92 0.006 256);
+  --color-input:          oklch(0.92 0.006 256);
+  --color-destructive:    oklch(0.6 0.21 25);
+  --color-success:        oklch(0.7 0.15 155);
+  --color-warning:        oklch(0.78 0.16 75);
 
   /* Sidebar shell (dark-on-light contrast panel) */
-  --color-sidebar-bg:     oklch(0.24  0.012 250);
-  --color-sidebar-fg:     oklch(0.92  0.006 90);
-  --color-sidebar-muted:  oklch(0.60  0.008 250);
-  --color-sidebar-border: oklch(0.32  0.010 250);
+  --color-sidebar-bg:     oklch(0.27 0.01 256);
+  --color-sidebar-fg:     oklch(0.985 0.002 247);
+  --color-sidebar-muted:  oklch(0.72 0.006 256);
+  --color-sidebar-border: oklch(0.34 0.01 256);
   --color-sidebar-active: var(--color-primary);
 
   /* Semantic badge colours */
-  --color-badge-warn-bg:  oklch(0.96  0.10  85);
-  --color-badge-warn-fg:  oklch(0.58  0.15  70);
-  --color-badge-info-bg:  oklch(0.93  0.07  240);
-  --color-badge-info-fg:  oklch(0.40  0.14  240);
-  --color-badge-ok-bg:    oklch(0.93  0.09  145);
-  --color-badge-ok-fg:    oklch(0.38  0.14  145);
-  --color-badge-def-bg:   oklch(0.93  0.004 250);
+  --color-badge-warn-bg:  oklch(0.78 0.16 75 / 0.15);
+  --color-badge-warn-fg:  oklch(0.62 0.13 75);
+  --color-badge-info-bg:  oklch(0.72 0.09 240 / 0.15);
+  --color-badge-info-fg:  oklch(0.48 0.14 240);
+  --color-badge-ok-bg:    oklch(0.7 0.15 155 / 0.15);
+  --color-badge-ok-fg:    oklch(0.42 0.15 155);
+  --color-badge-def-bg:   oklch(0.94 0.004 247);
   --color-badge-def-fg:   var(--color-muted-fg);
 
   /* --- Typography --- */
-  --font-display: 'Manrope', system-ui, sans-serif;
-  --font-mono:    'Courier New', monospace;
+  --font-display: 'Inter', system-ui, sans-serif;
+  --font-mono:    'Inter', system-ui, sans-serif;
 
   --text-xs:   0.75rem;   /* 12px */
   --text-sm:   0.8125rem; /* 13px */
@@ -79,15 +78,15 @@ button, input, select, textarea { font: inherit; }
   /* --- Shape --- */
   --radius-sm: 0.375rem;  /* 6px  */
   --radius:    0.625rem;  /* 10px */
-  --radius-lg: 0.875rem;  /* 14px */
+  --radius-lg: 0.75rem;
   --radius-xl: 1rem;
   --radius-full: 9999px;
 
   /* --- Shadows --- */
-  --shadow-xs: 0 1px 2px oklch(0.24 0.012 250 / 0.06);
-  --shadow-sm: 0 1px 4px oklch(0.24 0.012 250 / 0.08);
-  --shadow-md: 0 4px 12px oklch(0.24 0.012 250 / 0.10);
-  --shadow-lg: 0 8px 24px oklch(0.24 0.012 250 / 0.12);
+  --shadow-xs: none;
+  --shadow-sm: none;
+  --shadow-md: none;
+  --shadow-lg: none;
 
   /* --- Transitions --- */
   --ease: cubic-bezier(0.4, 0, 0.2, 1);
@@ -97,11 +96,12 @@ button, input, select, textarea { font: inherit; }
 
   /* --- Sidebar width --- */
   --sidebar-w: 256px;
+  --sidebar-w-collapsed: 72px;
 }
 
 /* ── Base ───────────────────────────────────────────────── */
 body {
-  font-family: 'Inter', sans-serif;
+  font-family: var(--font-display);
   font-size: var(--text-base);
   font-weight: var(--weight-normal);
   line-height: 1.6;
@@ -109,16 +109,39 @@ body {
   background: var(--color-bg);
   -webkit-font-smoothing: antialiased;
   -moz-osx-font-smoothing: grayscale;
+  font-feature-settings: 'cv02', 'cv03', 'cv04', 'cv11';
+  text-rendering: geometricPrecision;
 }
 
 h1,
 h2,
 h3 {
-  font-family: 'Poppins', sans-serif;
+  font-family: var(--font-display);
 }
+
+html {
+  color-scheme: light;
+  background:
+    radial-gradient(circle at top left, oklch(0.97 0.04 86 / 0.45), transparent 32%),
+    radial-gradient(circle at 85% 8%, oklch(0.95 0.01 247 / 0.55), transparent 24%),
+    var(--color-bg);
+}
+
+[data-theme="dark"] html,
+html[data-theme="dark"] {
+  color-scheme: dark;
+  background: var(--color-bg);
+}
+
+body { background: transparent; }
 
 /* Focus ring — accessible, on-brand */
 :focus-visible {
   outline: 2px solid var(--color-primary);
   outline-offset: 2px;
+}
+
+::selection {
+  background: oklch(0.82 0.16 86 / 0.2);
+  color: var(--color-fg);
 }

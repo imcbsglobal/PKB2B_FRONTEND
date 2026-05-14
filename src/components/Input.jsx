@@ -24,7 +24,7 @@ export default function Input({
       {label && (
         <label className="field__label">
           {label}
-          {required && <span style={{ color: '#ef4444', marginLeft: '4px' }}>*</span>}
+          {required && <span style={{ color: 'var(--color-destructive)', marginLeft: '4px' }}>*</span>}
         </label>
       )}
       <input
@@ -41,7 +41,7 @@ export default function Input({
       />
       {error && (
         <span className="field__error" style={{ display: 'flex', alignItems: 'center', gap: '4px' }}>
-          <span>⚠</span> {error}
+          <span>!</span> {error}
         </span>
       )}
     </div>

@@ -1,4 +1,5 @@
 import React from 'react';
+import EmptyState from './EmptyState';
 
 export default function Table({
   columns = [],
@@ -18,9 +19,7 @@ export default function Table({
             </tr>
           </thead>
         </table>
-        <div className="table-empty">
-          📭 No data available
-        </div>
+        <EmptyState title="No data available" description="Try adjusting your search or filters." icon="—" />
       </div>
     );
   }

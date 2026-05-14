@@ -1,6 +1,7 @@
 // src/App.jsx
 import React, { useState, useEffect, lazy, Suspense } from 'react';
 import Sidebar from './components/Sidebar';
+import TopNav from './components/TopNav';
 import Toast from './components/Toast';
 import { useToast } from './hooks/useToast';
 import { authAPI } from './Services/api';
@@ -35,6 +36,7 @@ const PAGES = {
 export default function App() {
   const [user, setUser]               = useState(null);
   const [currentPage, setCurrentPage] = useState('dashboard');
+  const [sidebarCollapsed, setSidebarCollapsed] = useState(false);
   const [bannerToEdit, setBannerToEdit] = useState(null);
   const [refreshTrigger, setRefreshTrigger] = useState(0);
   const { toasts, showToast, hideToast } = useToast();
@@ -92,9 +94,14 @@ export default function App() {
         currentPage={currentPage}
         onNavigate={handleNavigate}
         user={user}
-        onLogout={handleLogout}
+        collapsed={sidebarCollapsed}
+        onToggleCollapse={() => setSidebarCollapsed(prev => !prev)}
       />
       <main className="main-content">
+        <TopNav
+          currentPage={currentPage}
+          onLogout={handleLogout}
+        />
         <Suspense fallback={<div style={{ padding: '40px', textAlign: 'center', color: '#999' }}>Loading...</div>}>
           <PageComponent
             onNavigate={handleNavigate}

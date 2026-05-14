@@ -1,4 +1,5 @@
 import React, { useState } from 'react';
+import Button from './Button';
 
 export default function DateRangePicker({ onRangeChange }) {
   const [startDate, setStartDate] = useState('');
@@ -27,10 +28,10 @@ export default function DateRangePicker({ onRangeChange }) {
     const end = new Date();
     const start = new Date();
     start.setDate(start.getDate() - days);
-    
+
     const endStr = end.toISOString().split('T')[0];
     const startStr = start.toISOString().split('T')[0];
-    
+
     setStartDate(startStr);
     setEndDate(endStr);
     onRangeChange({ startDate: startStr, endDate: endStr });
@@ -38,88 +39,60 @@ export default function DateRangePicker({ onRangeChange }) {
 
   return (
     <div style={{ display: 'flex', gap: '12px', alignItems: 'center', flexWrap: 'wrap' }}>
-      <div style={{ display: 'flex', gap: '8px', alignItems: 'center' }}>
+      <div style={{ display: 'flex', gap: '8px', alignItems: 'center', flexWrap: 'wrap' }}>
         <input
           type="date"
           value={startDate}
           onChange={(e) => setStartDate(e.target.value)}
           style={{
             padding: '8px 12px',
-            border: '1px solid #d1d5db',
+            border: '1px solid var(--color-border)',
             borderRadius: '6px',
             fontSize: '14px',
           }}
         />
-        <span style={{ color: '#6b7280' }}>to</span>
+        <span style={{ color: 'var(--color-muted-fg)' }}>to</span>
         <input
           type="date"
           value={endDate}
           onChange={(e) => setEndDate(e.target.value)}
           style={{
             padding: '8px 12px',
-            border: '1px solid #d1d5db',
+            border: '1px solid var(--color-border)',
             borderRadius: '6px',
             fontSize: '14px',
           }}
         />
-        <button
-          onClick={handleApply}
-          disabled={!startDate || !endDate}
-          style={{
-            padding: '8px 16px',
-            background: '#3b82f6',
-            color: '#fff',
-            border: 'none',
-            borderRadius: '6px',
-            fontSize: '14px',
-            fontWeight: '500',
-            cursor: startDate && endDate ? 'pointer' : 'not-allowed',
-            opacity: startDate && endDate ? 1 : 0.5,
-          }}
-        >
+        <Button variant="primary" size="sm" onClick={handleApply} disabled={!startDate || !endDate}>
           Apply
-        </button>
+        </Button>
         {(startDate || endDate) && (
-          <button
-            onClick={handleClear}
-            style={{
-              padding: '8px 16px',
-              background: '#f3f4f6',
-              color: '#374151',
-              border: 'none',
-              borderRadius: '6px',
-              fontSize: '14px',
-              fontWeight: '500',
-              cursor: 'pointer',
-            }}
-          >
+          <Button variant="outline" size="sm" onClick={handleClear}>
             Clear
-          </button>
+          </Button>
         )}
       </div>
-      
-      <div style={{ display: 'flex', gap: '6px' }}>
-        {presets.map(preset => (
+
+      <div style={{ display: 'flex', gap: '6px', flexWrap: 'wrap' }}>
+        {presets.map((preset) => (
           <button
             key={preset.label}
             onClick={() => applyPreset(preset.days)}
             style={{
               padding: '6px 12px',
-              background: '#fff',
-              color: '#6b7280',
-              border: '1px solid #e5e7eb',
+              background: 'var(--color-card)',
+              color: 'var(--color-muted-fg)',
+              border: '1px solid var(--color-border)',
               borderRadius: '6px',
               fontSize: '13px',
               cursor: 'pointer',
               transition: 'all 0.2s',
             }}
             onMouseEnter={(e) => {
-              e.target.style.background = '#f9fafb';
-              e.target.style.borderColor = '#d1d5db';
+              e.currentTarget.style.background = 'var(--color-muted)';
             }}
             onMouseLeave={(e) => {
-              e.target.style.background = '#fff';
-              e.target.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.background = 'var(--color-card)';
             }}
           >
             {preset.label}

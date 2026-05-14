@@ -36,15 +36,7 @@ export default function Button({
     >
       {loading ? (
         <>
-          <span style={{
-            display: 'inline-block',
-            width: '12px',
-            height: '12px',
-            border: '2px solid currentColor',
-            borderRadius: '50%',
-            borderTopColor: 'transparent',
-            animation: 'spin 0.6s linear infinite',
-          }} />
+          <span className="btn__spinner" />
           Loading…
         </>
       ) : (

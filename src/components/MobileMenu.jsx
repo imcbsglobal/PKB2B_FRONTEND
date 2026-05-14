@@ -13,7 +13,7 @@ export default function MobileMenu({ children }) {
           top: '16px',
           left: '16px',
           zIndex: 10000,
-          background: '#3b82f6',
+          background: 'var(--color-primary)',
           border: 'none',
           borderRadius: '8px',
           width: '44px',
@@ -24,7 +24,7 @@ export default function MobileMenu({ children }) {
           justifyContent: 'center',
           gap: '5px',
           cursor: 'pointer',
-          boxShadow: '0 2px 8px rgba(0,0,0,0.15)',
+          boxShadow: 'none',
         }}
         className="mobile-menu-toggle"
       >
@@ -61,7 +61,7 @@ export default function MobileMenu({ children }) {
           style={{
             position: 'fixed',
             inset: 0,
-            background: 'rgba(0,0,0,0.5)',
+            background: 'oklch(0.22 0.012 256 / 0.5)',
             zIndex: 9998,
             animation: 'fadeIn 0.3s',
           }}
@@ -76,8 +76,8 @@ export default function MobileMenu({ children }) {
           left: isOpen ? 0 : '-280px',
           width: '280px',
           height: '100vh',
-          background: '#fff',
-          boxShadow: '2px 0 12px rgba(0,0,0,0.1)',
+          background: 'var(--color-card)',
+          borderRight: '1px solid var(--color-border)',
           zIndex: 9999,
           transition: 'left 0.3s cubic-bezier(0.4, 0, 0.2, 1)',
           overflowY: 'auto',

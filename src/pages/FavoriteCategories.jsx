@@ -1,675 +1,368 @@
-import React, { useState, useEffect, useCallback } from 'react';
+import React, { useState, useMemo } from 'react';
 import Input from '../components/Input';
-import { productAPI, brandAPI, productBatchAPI, categoryAPI } from '../Services/api';
+import LoadingSkeleton from '../components/LoadingSkeleton';
+import EmptyState from '../components/EmptyState';
+import { categoryAPI, brandAPI, productBatchAPI } from '../Services/api';
+import { useFetchData } from '../hooks/useFetchData';
 
-const styles = `
-  @import url('https://fonts.googleapis.com/css2?family=DM+Sans:ital,opsz,wght@0,9..40,300;0,9..40,400;0,9..40,500;0,9..40,600;1,9..40,400&family=DM+Mono:wght@400;500&display=swap');
+function normalizeKey(value) {
+  return (value || '').trim().toLowerCase();
+}
 
-  *, *::before, *::after { box-sizing: border-box; }
+function FavoriteButton({ active, onClick }) {
+  return (
+    <button
+      type="button"
+      className={`category-fav-btn ${active ? 'is-active' : ''}`}
+      onClick={onClick}
+      aria-pressed={active}
+      title={active ? 'Remove favorite' : 'Add favorite'}
+    >
+      <svg
+        width="18"
+        height="18"
+        viewBox="0 0 24 24"
+        fill={active ? 'currentColor' : 'none'}
+        stroke="currentColor"
+        strokeWidth="2"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+      >
+        <path d="M20.84 4.61a5.5 5.5 0 0 0-7.78 0L12 5.67l-1.06-1.06a5.5 5.5 0 0 0-7.78 7.78l1.06 1.06L12 21.23l7.78-7.78 1.06-1.06a5.5 5.5 0 0 0 0-7.78z" />
+      </svg>
+    </button>
+  );
+}
 
-  .fav-root {
-    font-family: 'DM Sans', sans-serif;
-    padding: 28px 32px;
-    background: #f5f5f4;
-    min-height: 100vh;
-  }
+function FavoriteCard({ item, onToggleFavorite }) {
+  const imageUrl = item.url || item.image;
+  const displayName = item.name || item.brand || 'N/A';
 
-  /* ── FILTER TABS (inside toolbar) ── */
-  .fav-filter-tabs {
-    display: flex;
-    gap: 2px;
-    background: #ffffff;
-    border: 1px solid #e4e4e7;
-    border-radius: 8px;
-    padding: 3px;
-  }
+  return (
+    <article className="category-card">
+      <div className="category-card__media">
+        {imageUrl ? (
+          <img
+            className="category-card__image"
+            src={String(imageUrl).replace(/\\/g, '/')}
+            alt={displayName}
+            loading="lazy"
+          />
+        ) : (
+          <div className="category-card__empty">No Image</div>
+        )}
+        <FavoriteButton active={true} onClick={() => onToggleFavorite(item)} />
+        {/* Type badge */}
+        <span className="fav-type-badge">{item._type === 'category' ? 'Category' : 'Brand'}</span>
+      </div>
+      <div className="category-card__body">
+        <h3 className="category-card__name">{displayName}</h3>
+        <p className="category-card__count">{item.itemCount || 0} items</p>
+      </div>
+    </article>
+  );
+}
 
-  .fav-tab {
-    font-family: 'DM Sans', sans-serif;
-    font-size: 13px;
-    font-weight: 500;
-    color: #71717a;
-    background: none;
-    border: none;
-    border-radius: 6px;
-    padding: 6px 14px;
-    cursor: pointer;
-    transition: background 0.15s, color 0.15s;
-    line-height: 1;
-  }
+export default function FavoriteCategories({ showToast }) {
+  const [search, setSearch] = useState('');
+  const [typeFilter, setTypeFilter] = useState('All');
 
-  .fav-tab:hover { color: #3f3f46; background: #f4f4f5; }
-
-  .fav-tab.active {
-    background: #18181b;
-    color: #ffffff;
-  }
-
-  /* ── SECTION ── */
-  .fav-section {
-    margin-bottom: 32px;
-  }
-
-  .fav-section-meta {
-    display: flex;
-    align-items: flex-end;
-    justify-content: space-between;
-    margin-bottom: 14px;
-  }
-
-  .fav-section-left h2 {
-    font-size: 17px;
-    font-weight: 600;
-    color: #18181b;
-    margin: 0 0 3px;
-    letter-spacing: -0.2px;
-  }
-
-  .fav-section-left p {
-    font-size: 13px;
-    color: #a1a1aa;
-    margin: 0;
-  }
-
-  .fav-count-badge {
-    font-family: 'DM Mono', monospace;
-    font-size: 11px;
-    font-weight: 500;
-    color: #71717a;
-    background: #ffffff;
-    border: 1px solid #e4e4e7;
-    padding: 4px 10px;
-    border-radius: 20px;
-  }
-
-  /* ── CARD GRID ── */
-  .fav-grid {
-    display: grid;
-    grid-template-columns: repeat(3, 1fr);
-    gap: 10px;
-  }
-
-  @media (max-width: 960px) { .fav-grid { grid-template-columns: repeat(2, 1fr); } }
-  @media (max-width: 600px)  { .fav-grid { grid-template-columns: 1fr; } }
-
-  .fav-card {
-    background: #ffffff;
-    border: 1px solid #e4e4e7;
-    border-radius: 10px;
-    padding: 16px 18px;
-    display: flex;
-    align-items: center;
-    gap: 14px;
-    cursor: pointer;
-    transition: border-color 0.15s, box-shadow 0.15s, transform 0.1s;
-    position: relative;
-    overflow: hidden;
-  }
-
-  .fav-card:hover {
-    border-color: #d4d4d8;
-    box-shadow: 0 2px 10px rgba(0,0,0,0.06);
-    transform: translateY(-1px);
-  }
-
-  .fav-card:active { transform: translateY(0); }
-
-  /* avatar */
-  .fav-avatar {
-    width: 42px;
-    height: 42px;
-    border-radius: 8px;
-    background: #f4f4f5;
-    border: 1px solid #e4e4e7;
-    display: flex;
-    align-items: center;
-    justify-content: center;
-    flex-shrink: 0;
-    overflow: hidden;
-  }
-
-  .fav-avatar img { width: 100%; height: 100%; object-fit: cover; }
-
-  .fav-avatar-text {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    font-weight: 500;
-    color: #71717a;
-    letter-spacing: 0.5px;
-  }
-
-  /* card body */
-  .fav-card-body { flex: 1; min-width: 0; }
-
-  .fav-card-name {
-    font-size: 14px;
-    font-weight: 600;
-    color: #18181b;
-    margin: 0 0 3px;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  .fav-card-sub {
-    font-size: 12px;
-    color: #a1a1aa;
-    margin: 0;
-    white-space: nowrap;
-    overflow: hidden;
-    text-overflow: ellipsis;
-  }
-
-  /* percentage badge */
-  .fav-pct {
-    font-family: 'DM Mono', monospace;
-    font-size: 12px;
-    font-weight: 500;
-    padding: 3px 8px;
-    border-radius: 20px;
-    flex-shrink: 0;
-    align-self: flex-start;
-  }
-
-  .fav-pct.pos { color: #16a34a; background: #f0fdf4; }
-  .fav-pct.neg { color: #dc2626; background: #fef2f2; }
-  .fav-pct.neu { color: #71717a; background: #f4f4f5; }
-
-  /* heart remove btn */
-  .fav-card-remove {
-    position: absolute;
-    top: 8px;
-    right: 8px;
-    background: none;
-    border: none;
-    cursor: pointer;
-    color: #d4d4d8;
-    font-size: 14px;
-    line-height: 1;
-    padding: 2px 4px;
-    border-radius: 4px;
-    opacity: 0;
-    transition: opacity 0.15s, color 0.15s, background 0.15s;
-  }
-
-  .fav-card:hover .fav-card-remove { opacity: 1; }
-  .fav-card-remove:hover { color: #f87171; background: #fff1f2; }
-
-  /* ── EMPTY / LOADING ── */
-  .fav-empty {
-    grid-column: 1 / -1;
-    padding: 32px;
-    text-align: center;
-    color: #a1a1aa;
-    font-size: 13px;
-    background: #ffffff;
-    border: 1px solid #e4e4e7;
-    border-radius: 10px;
-  }
-
-  /* ── MODAL ── */
-  .fav-overlay {
-    position: fixed;
-    inset: 0;
-    background: rgba(0,0,0,0.35);
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    z-index: 999;
-    padding: 20px;
-    backdrop-filter: blur(2px);
-  }
-
-  .fav-modal {
-    width: 100%;
-    max-width: 860px;
-    background: #fff;
-    border-radius: 12px;
-    border: 1px solid #e4e4e7;
-    max-height: 80vh;
-    overflow: auto;
-    box-shadow: 0 20px 60px rgba(0,0,0,0.15);
-  }
-
-  .fav-modal-header {
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    padding: 16px 20px;
-    border-bottom: 1px solid #f0f0f0;
-    position: sticky;
-    top: 0;
-    background: #fff;
-    z-index: 1;
-  }
-
-  .fav-modal-title { font-size: 15px; font-weight: 600; color: #18181b; margin: 0; }
-
-  .fav-modal-close {
-    background: #f4f4f5;
-    border: 1px solid #e4e4e7;
-    width: 28px; height: 28px;
-    border-radius: 6px;
-    cursor: pointer;
-    font-size: 16px;
-    color: #71717a;
-    display: flex; align-items: center; justify-content: center;
-    transition: background 0.15s;
-  }
-
-  .fav-modal-close:hover { background: #e4e4e7; color: #3f3f46; }
-
-  .fav-modal-meta {
-    padding: 10px 20px;
-    font-size: 12px;
-    color: #a1a1aa;
-    border-bottom: 1px solid #f0f0f0;
-    font-family: 'DM Mono', monospace;
-  }
-
-  /* TABLE in modal */
-  .fav-table { width: 100%; border-collapse: collapse; }
-  .fav-table thead tr { background: #fafaf9; }
-  .fav-table th {
-    font-size: 11px; font-weight: 600; color: #a1a1aa;
-    text-transform: uppercase; letter-spacing: 0.5px;
-    padding: 9px 18px; text-align: left;
-    border-bottom: 1px solid #f0f0f0;
-  }
-  .fav-table th.center { text-align: center; }
-  .fav-table td {
-    padding: 10px 18px;
-    border-bottom: 1px solid #f8f8f7;
-    font-size: 13px; color: #3f3f46;
-    vertical-align: middle;
-  }
-  .fav-table tbody tr:last-child td { border-bottom: none; }
-  .fav-table tbody tr:hover td { background: #fafaf9; }
-  .fav-table td.center { text-align: center; }
-
-  .fav-thumb {
-    width: 34px; height: 34px;
-    background: #f4f4f5; border: 1px solid #e4e4e7;
-    border-radius: 6px; overflow: hidden;
-    display: flex; align-items: center; justify-content: center;
-    flex-shrink: 0;
-  }
-  .fav-thumb img { width: 100%; height: 100%; object-fit: cover; }
-  .fav-thumb-placeholder { font-size: 10px; color: #a1a1aa; font-weight: 600; font-family: 'DM Mono', monospace; }
-
-  .stock-in  { color: #16a34a; font-weight: 600; font-size: 12px; }
-  .stock-low { color: #d97706; font-weight: 600; font-size: 12px; }
-  .stock-out { color: #dc2626; font-weight: 600; font-size: 12px; }
-  .price-cell { font-family: 'DM Mono', monospace; font-size: 12px; }
-
-  .error-box {
-    padding: 16px 20px;
-    background: #fef2f2; border: 1px solid #fecaca;
-    border-radius: 8px; color: #dc2626; font-size: 13px;
-    margin-top: 16px;
-  }
-`;
-
-/* ── helpers ── */
-const abbr = (name = '') =>
-  name.split(/\s+/).slice(0, 2).map(w => w[0]?.toUpperCase()).join('');
-
-const pctDisplay = (val) => {
-  if (val == null) return null;
-  const n = parseFloat(val);
-  if (isNaN(n)) return null;
-  const cls = n > 0 ? 'pos' : n < 0 ? 'neg' : 'neu';
-  return <span className={`fav-pct ${cls}`}>{n > 0 ? '+' : ''}{n}%</span>;
-};
-
-export default function Favorites() {
-  const [favoriteCategories, setFavoriteCategories] = useState([]);
-  const [favoriteBrands, setFavoriteBrands]         = useState([]);
-  const [categoryLoading, setCategoryLoading]        = useState(true);
-  const [brandLoading, setBrandLoading]              = useState(true);
-  const [error, setError]                            = useState(null);
-  const [activeTab, setActiveTab]                    = useState('All');
-  const [globalSearch, setGlobalSearch]              = useState('');
-
-  const [modalOpen, setModalOpen]     = useState(false);
-  const [selectedItem, setSelectedItem] = useState(null);
-  const [itemType, setItemType]         = useState(null);
-  const [itemsInModal, setItemsInModal] = useState([]);
-  const [itemsLoading, setItemsLoading] = useState(false);
-
-  const fetchFavorites = async () => {
+  // ── local favorite overrides (mirrors Categories page) ──
+  const [catFavOverrides, setCatFavOverrides] = useState(() => {
     try {
-      setCategoryLoading(true);
-      setBrandLoading(true);
-      const [categoryResponse, brandResponse, itemsResponse] = await Promise.all([
-        productAPI.getAllProducts(),
-        brandAPI.getAllBrands(),
-        productBatchAPI.getAllItems(),
-      ]);
+      const saved = localStorage.getItem('local_fav_categories');
+      if (!saved) return {};
+      const arr = JSON.parse(saved);
+      return Array.isArray(arr)
+        ? arr.reduce((acc, name) => { acc[normalizeKey(name)] = true; return acc; }, {})
+        : {};
+    } catch { return {}; }
+  });
 
-      const items = itemsResponse.data || [];
-      const categoryCounts = {};
-      const brandCounts = {};
+  const [brandFavOverrides, setBrandFavOverrides] = useState({});
 
-      items.forEach((item) => {
-        const cat = item.product?.toLowerCase().trim();
-        const br  = item.brand?.toLowerCase().trim();
-        if (cat) categoryCounts[cat] = (categoryCounts[cat] || 0) + 1;
-        if (br)  brandCounts[br]     = (brandCounts[br]  || 0) + 1;
-      });
+  // ── data fetching ──
+  const categoriesResult = useFetchData('categories', () => categoryAPI.getCategories());
+  const brandsResult = useFetchData('brands', () => brandAPI.getAllBrands());
+  const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
 
-      // Server-side favorites (if any)
-      const serverCategories = (categoryResponse.data || []).map((p, i) => ({
-        ...p,
-        id: p.id ?? i,
-        itemCount: categoryCounts[p.name?.toLowerCase().trim()] || 0,
-      }));
+  const rawCategories = Array.isArray(categoriesResult.data) ? categoriesResult.data : [];
+  const rawBrands = Array.isArray(brandsResult.data) ? brandsResult.data : [];
+  const allItems = Array.isArray(itemsResult.data) ? itemsResult.data : [];
 
-      let favoritesFromServer = serverCategories.filter(p => p.is_favorite === true);
+  const loading = categoriesResult.loading || brandsResult.loading || itemsResult.loading;
 
-      // Local favorites persisted in localStorage
-      let localFavNames = [];
-      try { localFavNames = JSON.parse(localStorage.getItem('local_fav_categories') || '[]'); } catch (e) { localFavNames = []; }
-      const localFavorites = [];
-      localFavNames.forEach((name, idx) => {
-        const found = serverCategories.find(c => (c.name || '').toLowerCase() === (name || '').toLowerCase());
-        if (found && !favoritesFromServer.find(f => (f.name||'').toLowerCase() === (found.name||'').toLowerCase())) {
-          localFavorites.push({ ...found, id: `local-${idx}-${found.name}`, _local: true });
-        }
-      });
+  // ── item counts ──
+  const categoryCountMap = useMemo(() =>
+    allItems.reduce((acc, item) => {
+      const key = normalizeKey(item.company);
+      if (key) acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {}),
+    [allItems]
+  );
 
-      setFavoriteCategories([
-        ...favoritesFromServer,
-        ...localFavorites,
-      ]);
+  const brandCountMap = useMemo(() =>
+    allItems.reduce((acc, item) => {
+      const key = normalizeKey(item.brand);
+      if (key) acc[key] = (acc[key] || 0) + 1;
+      return acc;
+    }, {}),
+    [allItems]
+  );
 
-      setFavoriteBrands(
-        (brandResponse.data || [])
-          .filter(b => b.is_favorite === true)
-          .map((b, i) => ({
-            ...b,
-            id: b.id ?? i,
-            itemCount: brandCounts[b.name?.toLowerCase().trim()] || 0,
-          }))
-      );
+  // ── build favorited lists ──
+  const favoritedCategories = useMemo(() =>
+    rawCategories
+      .map((cat) => {
+        const key = normalizeKey(cat.name);
+        const isFav = catFavOverrides[key] ?? Boolean(cat.is_favorite);
+        return {
+          ...cat,
+          _type: 'category',
+          itemCount: categoryCountMap[key] || 0,
+          isFavorite: isFav,
+        };
+      })
+      .filter((cat) => cat.isFavorite),
+    [rawCategories, catFavOverrides, categoryCountMap]
+  );
 
-      setError(null);
-    } catch (err) {
-      console.error(err);
-      setError('Failed to load favorites');
-      setFavoriteCategories([]);
-      setFavoriteBrands([]);
-    } finally {
-      setCategoryLoading(false);
-      setBrandLoading(false);
+  const favoritedBrands = useMemo(() =>
+    rawBrands
+      .map((brand) => {
+        const key = normalizeKey(brand.brand || brand.name);
+        const isFav = brandFavOverrides[key] ?? Boolean(brand.is_favorite);
+        return {
+          ...brand,
+          _type: 'brand',
+          itemCount: brandCountMap[key] || 0,
+          isFavorite: isFav,
+        };
+      })
+      .filter((brand) => brand.isFavorite),
+    [rawBrands, brandFavOverrides, brandCountMap]
+  );
+
+  // ── counts for filter tabs ──
+  const allCount = favoritedCategories.length + favoritedBrands.length;
+  const categoryCount = favoritedCategories.length;
+  const brandCount = favoritedBrands.length;
+
+  // ── filtered items based on tab + search ──
+  const filteredItems = useMemo(() => {
+    const term = search.trim().toLowerCase();
+    let items = [];
+
+    if (typeFilter === 'All' || typeFilter === 'Category') {
+      items = items.concat(favoritedCategories);
     }
-  };
+    if (typeFilter === 'All' || typeFilter === 'Brand') {
+      items = items.concat(favoritedBrands);
+    }
 
-  useEffect(() => { fetchFavorites(); }, []);
+    if (term) {
+      items = items.filter((item) => {
+        const name = item.name || item.brand || '';
+        return name.toLowerCase().includes(term);
+      });
+    }
 
-  const handleCardClick = async (item, type) => {
-    setSelectedItem(item);
-    setItemType(type);
-    setModalOpen(true);
-    setItemsLoading(true);
-    try {
-      const response = await productBatchAPI.getAllItems();
-      const all = response.data || [];
-      setItemsInModal(
-        type === 'category'
-          ? all.filter(i => i.product?.toLowerCase() === item.name?.toLowerCase())
-          : all.filter(i => i.brand?.toLowerCase()   === item.name?.toLowerCase())
-      );
-    } catch { setItemsInModal([]); }
-    finally  { setItemsLoading(false); }
-  };
+    return items;
+  }, [favoritedCategories, favoritedBrands, typeFilter, search]);
 
-  const toggleFavoriteCategory = useCallback(async (e, row) => {
-    e.stopPropagation();
-    // If this is a local favorite, remove from localStorage
-    if (row._local) {
+  // ── toggle handlers (mirrors Categories / Brands pages) ──
+  const handleToggleFavorite = async (item) => {
+    if (item._type === 'category') {
+      const key = normalizeKey(item.name);
+      setCatFavOverrides((prev) => {
+        const updated = { ...prev, [key]: false };
+        try {
+          const names = Object.keys(updated).filter((k) => updated[k]);
+          localStorage.setItem('local_fav_categories', JSON.stringify(names));
+        } catch {}
+        return updated;
+      });
+      showToast?.('Removed from favorites', 'success');
+    } else {
+      const key = normalizeKey(item.brand || item.name);
+      setBrandFavOverrides((prev) => ({ ...prev, [key]: false }));
       try {
-        const saved = JSON.parse(localStorage.getItem('local_fav_categories') || '[]');
-        const normalized = (saved || []).filter(n => (n || '').toLowerCase() !== (row.name || '').toLowerCase());
-        localStorage.setItem('local_fav_categories', JSON.stringify(normalized));
-        setFavoriteCategories(prev => prev.filter(p => p.id !== row.id));
-        return;
+        const response = await brandAPI.toggleBrandFavorite(item.brand || item.name);
+        const isFav = response.data?.is_favorite;
+        setBrandFavOverrides((prev) => ({ ...prev, [key]: isFav }));
+        showToast?.('Removed from favorites', 'success');
       } catch (err) {
-        console.error('Failed to remove local favorite', err);
+        setBrandFavOverrides((prev) => ({ ...prev, [key]: true }));
+        showToast?.('Failed to update favorite', 'error');
       }
     }
-
-    // Otherwise attempt server-side toggle (fallback)
-    setFavoriteCategories(prev => prev.filter(p => p.id !== row.id));
-    try { await productAPI.toggleProductFavorite(row.name); }
-    catch { fetchFavorites(); }
-  }, []);
-
-  const toggleFavoriteBrand = useCallback(async (e, row) => {
-    e.stopPropagation();
-    setFavoriteBrands(prev => prev.filter(b => b.id !== row.id));
-    try { await brandAPI.toggleBrandFavorite(row.name); }
-    catch { fetchFavorites(); }
-  }, []);
-
-  const q = globalSearch.toLowerCase();
-  const filteredCategories = favoriteCategories.filter(p => p.name?.toLowerCase().includes(q));
-  const filteredBrands     = favoriteBrands.filter(b => b.name?.toLowerCase().includes(q));
-
-  const showCategories = activeTab !== 'Brands';
-  const showBrands     = activeTab !== 'Categories';
-
-  const Thumb = ({ src, alt, fallback }) => (
-    <div className="fav-thumb">
-      {src
-        ? <img src={src} alt={alt} />
-        : <span className="fav-thumb-placeholder">{fallback || '—'}</span>
-      }
-    </div>
-  );
-
-  const stockLabel = (qty) => {
-    if (qty <= 0) return <span className="stock-out">Out of Stock</span>;
-    if (qty <= 5) return <span className="stock-low">Low Stock</span>;
-    return <span className="stock-in">In Stock</span>;
   };
 
-  /* ── sub-line for category card ── */
-  const categorySubline = (row) => {
-    const parts = [];
-    if (row.itemCount) parts.push(`${row.itemCount} products`);
-    if (row.brandCount) parts.push(`${row.brandCount} brands`);
-    return parts.length ? parts.join(' · ') : 'No items yet';
-  };
-
-  /* ── sub-line for brand card ── */
-  const brandSubline = (row) => {
-    const parts = [];
-    if (row.category) parts.push(row.category);
-    if (row.tier)     parts.push(row.tier);
-    if (!parts.length && row.itemCount) parts.push(`${row.itemCount} items`);
-    return parts.join(' · ') || 'No info';
-  };
-
-  if (error) return (
-    <div className="page">
-      <style>{styles}</style>
-      <div className="page__header"><div><h1 className="page__title">Favorites</h1></div></div>
-      <div className="error-box">{error}</div>
-    </div>
-  );
+  const filters = [
+    { label: 'All', count: allCount },
+    { label: 'Category', count: categoryCount },
+    { label: 'Brand', count: brandCount },
+  ];
 
   return (
     <div className="page">
-      <style>{styles}</style>
-
-      {/* HEADER */}
       <div className="page__header">
-        <div>
-          <h1 className="page__title">Favorites</h1>
-          <p className="page__sub">
-            {filteredCategories.length + filteredBrands.length} favorites found
-          </p>
-        </div>
+        <h1 className="page__title">Favorites</h1>
+        <p className="page__sub">Collections of your favorite categories and brands</p>
       </div>
 
-      {/* TOOLBAR */}
-      <div className="toolbar">
-        <Input
-          className="toolbar__search"
-          placeholder="Search favorites…"
-          value={globalSearch}
-          onChange={e => setGlobalSearch(e.target.value)}
-        />
-        <div className="fav-filter-tabs">
-          {['All', 'Categories', 'Brands'].map(tab => (
+      {/* ── Toolbar ── */}
+      <div className="fav-toolbar">
+        <div className="fav-toolbar__search">
+          <Input
+            placeholder="Search favorites..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+          />
+        </div>
+
+        {/* Filter tabs — same item-filter style as Categories/Brands pages */}
+        <div className="item-filters fav-filters" role="tablist" aria-label="Favorite type filters">
+          {filters.map((f) => (
             <button
-              key={tab}
-              className={`fav-tab${activeTab === tab ? ' active' : ''}`}
-              onClick={() => setActiveTab(tab)}
+              key={f.label}
+              role="tab"
+              aria-selected={typeFilter === f.label}
+              className={`item-filter${typeFilter === f.label ? ' active' : ''}`}
+              onClick={() => setTypeFilter(f.label)}
             >
-              {tab}
+              {f.label}
+              <span className="filter-count">{f.count}</span>
             </button>
           ))}
         </div>
       </div>
 
-      {/* CATEGORIES */}
-      {showCategories && (
-        <div className="fav-section">
-          <div className="fav-section-meta">
-            <div className="fav-section-left">
-              <h2>Favorite Categories</h2>
-              <p>Topics you follow — neatly grouped.</p>
-            </div>
-            <span className="fav-count-badge">
-              {filteredCategories.length} {filteredCategories.length === 1 ? 'category' : 'categories'}
-            </span>
-          </div>
-
-          <div className="fav-grid">
-            {categoryLoading ? (
-              <div className="fav-empty">Loading categories…</div>
-            ) : filteredCategories.length === 0 ? (
-              <div className="fav-empty">No favorite categories yet.</div>
-            ) : filteredCategories.map(row => (
-              <div className="fav-card" key={row.id} onClick={() => handleCardClick(row, 'category')}>
-                <div className="fav-avatar">
-                  {row.url
-                    ? <img src={row.url} alt={row.name} />
-                    : <span className="fav-avatar-text">{abbr(row.name)}</span>
-                  }
-                </div>
-                <div className="fav-card-body">
-                  <p className="fav-card-name">{row.name}</p>
-                  <p className="fav-card-sub">{categorySubline(row)}</p>
-                </div>
-                {pctDisplay(row.growth ?? row.change)}
-                <button
-                  className="fav-card-remove"
-                  onClick={e => toggleFavoriteCategory(e, row)}
-                  title="Remove from favorites"
-                >♥</button>
-              </div>
-            ))}
-          </div>
+      {/* ── Content ── */}
+      {loading ? (
+        <div style={{ marginTop: 'var(--space-6)' }}>
+          <LoadingSkeleton rows={2} columns={5} />
+        </div>
+      ) : filteredItems.length === 0 ? (
+        <EmptyState
+          icon="❤️"
+          title={search ? 'No results found' : 'No favorites yet'}
+          description={
+            search
+              ? `No ${typeFilter === 'All' ? 'items' : typeFilter.toLowerCase() + 's'} matching "${search}"`
+              : `Mark categories or brands as favorite to see them here`
+          }
+        />
+      ) : (
+        <div className="category-grid">
+          {filteredItems.map((item) => (
+            <FavoriteCard
+              key={`${item._type}-${item.id || item.name || item.brand}`}
+              item={item}
+              onToggleFavorite={handleToggleFavorite}
+            />
+          ))}
         </div>
       )}
 
-      {/* BRANDS */}
-      {showBrands && (
-        <div className="fav-section">
-          <div className="fav-section-meta">
-            <div className="fav-section-left">
-              <h2>Favorite Brands</h2>
-              <p>Brands you keep an eye on.</p>
-            </div>
-            <span className="fav-count-badge">
-              {filteredBrands.length} {filteredBrands.length === 1 ? 'brand' : 'brands'}
-            </span>
-          </div>
+      <style>{`
+        /* ── Toolbar ── */
+        .fav-toolbar {
+          display: flex;
+          align-items: center;
+          gap: var(--space-4);
+          margin-bottom: var(--space-6);
+          flex-wrap: wrap;
+        }
 
-          <div className="fav-grid">
-            {brandLoading ? (
-              <div className="fav-empty">Loading brands…</div>
-            ) : filteredBrands.length === 0 ? (
-              <div className="fav-empty">No favorite brands yet.</div>
-            ) : filteredBrands.map(row => (
-              <div className="fav-card" key={row.id} onClick={() => handleCardClick(row, 'brand')}>
-                <div className="fav-avatar">
-                  {row.logo
-                    ? <img src={row.logo} alt={row.name} />
-                    : <span className="fav-avatar-text">{abbr(row.name)}</span>
-                  }
-                </div>
-                <div className="fav-card-body">
-                  <p className="fav-card-name">{row.name}</p>
-                  <p className="fav-card-sub">{brandSubline(row)}</p>
-                </div>
-                {pctDisplay(row.growth ?? row.change)}
-                <button
-                  className="fav-card-remove"
-                  onClick={e => toggleFavoriteBrand(e, row)}
-                  title="Remove from favorites"
-                >♥</button>
-              </div>
-            ))}
-          </div>
-        </div>
-      )}
+        .fav-toolbar__search {
+          flex: 1;
+          min-width: 220px;
+        }
 
-      {/* MODAL */}
-      {modalOpen && (
-        <div className="fav-overlay" onClick={e => e.target === e.currentTarget && setModalOpen(false)}>
-          <div className="fav-modal">
-            <div className="fav-modal-header">
-              <h2 className="fav-modal-title">{selectedItem?.name}</h2>
-              <button className="fav-modal-close" onClick={() => setModalOpen(false)}>×</button>
-            </div>
-            <div className="fav-modal-meta">
-              {itemsLoading ? 'Loading…' : `${itemsInModal.length} items`}
-            </div>
+        .fav-filters {
+          flex-shrink: 0;
+          display: flex;
+          align-items: center;
+          gap: 2px;
+          background: #f0f0f0;
+          border-radius: 14px;
+          padding: 4px;
+        }
 
-            {itemsLoading ? (
-              <div className="fav-empty">Loading items…</div>
-            ) : itemsInModal.length === 0 ? (
-              <div className="fav-empty">No items found for {selectedItem?.name}</div>
-            ) : (
-              <table className="fav-table">
-                <thead>
-                  <tr>
-                    <th style={{ width: 48 }}>Img</th>
-                    <th style={{ width: 100 }}>Code</th>
-                    <th>Name</th>
-                    <th>Brand</th>
-                    <th className="center" style={{ width: 80 }}>Price</th>
-                    <th className="center" style={{ width: 70 }}>Stock</th>
-                    <th className="center" style={{ width: 100 }}>Status</th>
-                  </tr>
-                </thead>
-                <tbody>
-                  {itemsInModal.map((row, i) => (
-                    <tr key={row.id ?? i}>
-                      <td><Thumb src={row.url2} alt={row.name} fallback="IMG" /></td>
-                      <td style={{ fontFamily: 'DM Mono, monospace', fontSize: 12, color: '#71717a' }}>{row.code}</td>
-                      <td style={{ fontWeight: 500, color: '#18181b' }}>{row.name}</td>
-                      <td style={{ color: '#71717a' }}>{row.brand}</td>
-                      <td className="center price-cell">₹{row.price || 0}</td>
-                      <td className="center" style={{
-                        fontFamily: 'DM Mono, monospace', fontSize: 12, fontWeight: 600,
-                        color: row.quantity <= 0 ? '#dc2626' : row.quantity <= 5 ? '#d97706' : '#16a34a'
-                      }}>
-                        {row.quantity}
-                      </td>
-                      <td className="center">{stockLabel(row.quantity)}</td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table>
-            )}
-          </div>
-        </div>
-      )}
+        /* Override item-filter styles scoped to fav-filters */
+        .fav-filters .item-filter {
+          padding: 7px 16px;
+          border-radius: 10px;
+          border: none;
+          background: transparent;
+          color: #888;
+          font-size: var(--text-sm);
+          font-weight: var(--weight-semibold);
+          cursor: pointer;
+          display: flex;
+          align-items: center;
+          gap: 6px;
+          transition: all 0.15s ease;
+          white-space: nowrap;
+          box-shadow: none;
+        }
+
+        .fav-filters .item-filter:hover:not(.active) {
+          color: #333;
+          background: rgba(0, 0, 0, 0.05);
+        }
+
+        .fav-filters .item-filter.active {
+          background: #1a1a1a;
+          color: #fff;
+          box-shadow: 0 1px 4px rgba(0, 0, 0, 0.18);
+        }
+
+        .fav-filters .item-filter .filter-count {
+          opacity: 0.75;
+          font-size: var(--text-sm);
+          font-weight: var(--weight-semibold);
+        }
+
+        .fav-filters .item-filter.active .filter-count {
+          opacity: 0.85;
+        }
+
+        /* ── Type badge on card ── */
+        .fav-type-badge {
+          position: absolute;
+          bottom: var(--space-2);
+          left: var(--space-2);
+          padding: 2px 8px;
+          background: rgba(0, 0, 0, 0.55);
+          color: #fff;
+          font-size: 11px;
+          font-weight: var(--weight-semibold);
+          border-radius: var(--radius-sm);
+          letter-spacing: 0.03em;
+          pointer-events: none;
+          backdrop-filter: blur(4px);
+        }
+
+        @media (max-width: 700px) {
+          .fav-toolbar {
+            flex-direction: column;
+            align-items: stretch;
+          }
+
+          .fav-filters {
+            width: 100%;
+            justify-content: stretch;
+          }
+
+          .fav-filters .item-filter {
+            flex: 1;
+            justify-content: center;
+          }
+        }
+      `}</style>
     </div>
   );
 }

@@ -36,14 +36,14 @@ export default function SortableTable({ columns = [], rows = [] }) {
                 style={{
                   padding: '16px',
                   textAlign: col.align || 'left',
-                  borderBottom: '2px solid #e5e7eb',
+                  borderBottom: '2px solid var(--color-border)',
                   whiteSpace: 'nowrap',
                   cursor: col.sortable !== false ? 'pointer' : 'default',
                   userSelect: 'none',
-                  background: sortConfig.key === col.key ? '#f9fafb' : 'transparent',
+                  background: sortConfig.key === col.key ? 'var(--color-muted)' : 'transparent',
                   fontWeight: '600',
                   fontSize: '13px',
-                  color: '#6b7280',
+                  color: 'var(--color-muted-fg)',
                   textTransform: 'uppercase',
                   letterSpacing: '0.5px',
                 }}
@@ -67,7 +67,7 @@ export default function SortableTable({ columns = [], rows = [] }) {
               style={{
                 transition: 'background 0.2s',
               }}
-              onMouseEnter={(e) => e.currentTarget.style.background = '#f9fafb'}
+              onMouseEnter={(e) => e.currentTarget.style.background = 'var(--color-muted)'}
               onMouseLeave={(e) => e.currentTarget.style.background = 'transparent'}
             >
               {columns.map((col) => (
@@ -75,7 +75,7 @@ export default function SortableTable({ columns = [], rows = [] }) {
                   key={col.key}
                   style={{
                     padding: '16px',
-                    borderBottom: '1px solid #f3f4f6',
+                    borderBottom: '1px solid var(--color-border)',
                     textAlign: col.align || 'left',
                   }}
                 >

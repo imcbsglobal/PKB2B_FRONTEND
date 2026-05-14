@@ -15,14 +15,14 @@ export default function EmptyState({
         justifyContent: 'center',
         padding: '60px 20px',
         textAlign: 'center',
-        color: '#6b7280',
+        color: 'var(--color-muted-fg)',
       }}
     >
       <div
         style={{
           fontSize: '64px',
           marginBottom: '16px',
-          opacity: 0.5,
+          opacity: 0.6,
         }}
       >
         {icon}
@@ -31,7 +31,7 @@ export default function EmptyState({
         style={{
           fontSize: '18px',
           fontWeight: '600',
-          color: '#374151',
+          color: 'var(--color-fg)',
           marginBottom: '8px',
         }}
       >
@@ -40,7 +40,7 @@ export default function EmptyState({
       <p
         style={{
           fontSize: '14px',
-          color: '#9ca3af',
+          color: 'var(--color-muted-fg)',
           marginBottom: '24px',
           maxWidth: '400px',
         }}
