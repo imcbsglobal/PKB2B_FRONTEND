@@ -28,6 +28,30 @@ function getStatusVariant(status) {
   return STATUS_VARIANT[status?.toLowerCase()] ?? 'default';
 }
 
+function formatDateToDDMMYYYY(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return String(value);
+  const day = String(d.getDate()).padStart(2, '0');
+  const month = String(d.getMonth() + 1).padStart(2, '0');
+  const year = d.getFullYear();
+  return `${day}/${month}/${year}`;
+}
+
+function formatTimeTo12Hour(value) {
+  if (!value) return '';
+  const d = new Date(value);
+  if (Number.isNaN(d.getTime())) return '';
+
+  let hours = d.getHours();
+  const minutes = String(d.getMinutes()).padStart(2, '0');
+  const amPm = hours >= 12 ? 'pm' : 'am';
+  hours = hours % 12;
+  if (hours === 0) hours = 12;
+
+  return `${String(hours).padStart(2, '0')}:${minutes} ${amPm}`;
+}
+
 function OrderCell({ title, sub }) {
   return (
     <div className="orders-cell">
@@ -197,7 +221,6 @@ export default function Orders({ showToast }) {
                     <th>PHONE</th>
                     <th>ITEM CODE</th>
                     <th>ITEM NAME</th>
-                    <th>BARCODE</th>
                     <th>QTY</th>
                     <th>RATE</th>
                     <th>STATUS</th>
@@ -216,12 +239,20 @@ export default function Orders({ showToast }) {
                         <td title={row.customer_code}>{row.customer_code || '—'}</td>
                         <td title={row.phone_number}>{row.phone_number || '—'}</td>
                         <td title={row.item_code}>{row.item_code || '—'}</td>
-                        <td title={`${row.item_name} (${row.barcode})`}><OrderCell title={row.item_name || '—'} sub={row.barcode || '—'} /></td>
-                        <td title={row.barcode}>{row.barcode || '—'}</td>
+                        <td title={row.item_name}><OrderCell title={row.item_name || '—'} sub={row.barcode || '—'} /></td>
                         <td title={row.quantity}>{row.quantity ?? 0}</td>
                         <td className="orders-table__rate" title={`₹ ${Number(row.rate || 0).toLocaleString('en-IN')}`}>₹ {Number(row.rate || 0).toLocaleString('en-IN')}</td>
                         <td><Badge variant={statusVariant}>{row.status || '—'}</Badge></td>
-                        <td title={row.created_at}>{row.created_at || '—'}</td>
+                        <td title={row.created_at}>
+                          {row.created_at ? (
+                            <div className="orders-date-stack">
+                              <div>{formatDateToDDMMYYYY(row.created_at)}</div>
+                              <div className="orders-date-stack__time">{formatTimeTo12Hour(row.created_at)}</div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
                             {row.status?.toLowerCase() === 'pending' ? (
@@ -427,42 +458,36 @@ export default function Orders({ showToast }) {
         .orders-table td:nth-child(4),
         .orders-table th:nth-child(5),
         .orders-table td:nth-child(5) {
-          width: 9%;
+          width: 8%;
         }
 
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 14%;
+          width: 18%;
         }
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
-          width: 10%;
+          width: 6%;
         }
 
         .orders-table th:nth-child(8),
-        .orders-table td:nth-child(8),{
-          width: 10%;
-        }
-        .orders-table th:nth-child(9),
-        .orders-table td:nth-child(9) {
+        .orders-table td:nth-child(8) {
           width: 6%;
         }
+
+        .orders-table th:nth-child(9),
+        .orders-table td:nth-child(9) {
+          width: 8%;
 
         .orders-table th:nth-child(10),
         .orders-table td:nth-child(10) {
           width: 8%;
-        }
 
         .orders-table th:nth-child(11),
         .orders-table td:nth-child(11) {
           width: 10%;
-        }
-
-        .orders-table th:nth-child(12),
-        .orders-table td:nth-child(12) {
-          width: 10%;
-        }
+          }
 
         .orders-table__action {
           overflow: visible !important;
@@ -486,6 +511,19 @@ export default function Orders({ showToast }) {
           font-size: var(--text-xs);
           color: var(--color-muted-fg);
           white-space: nowrap;
+        }
+
+        .orders-date-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 2px;
+          white-space: nowrap;
+        }
+
+        .orders-date-stack__time {
+          font-size: var(--text-xs);
+          color: var(--color-muted-fg);
+          text-transform: lowercase;
         }
 
         .orders-actions {
