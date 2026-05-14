@@ -1,10 +1,7 @@
 import React, { useMemo, useState } from 'react';
 
-import Badge from '../components/Badge';
-import Button from '../components/Button';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
-import Spinner from '../components/Spinner';
 import Pagination from '../components/Pagination';
 
 import { orderAPI } from '../Services/api';
@@ -12,21 +9,11 @@ import { useFetchData } from '../hooks/useFetchData';
 import { usePagination } from '../hooks/usePagination';
 import { dataCache } from '../utils/cache';
 
-const STATUS_VARIANT = {
-  pending: 'warning',
-  completed: 'success',
-  accepted: 'info',
-};
-
 const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Pending', label: 'Pending' },
   { id: 'Completed', label: 'Complete' },
 ];
-
-function getStatusVariant(status) {
-  return STATUS_VARIANT[status?.toLowerCase()] ?? 'default';
-}
 
 function formatDateToDDMMYYYY(value) {
   if (!value) return '';
@@ -66,6 +53,7 @@ export default function Orders({ showToast }) {
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
+  const [viewingOrderId, setViewingOrderId] = useState(null);
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
@@ -117,6 +105,23 @@ export default function Orders({ showToast }) {
     }
   };
 
+  const handleStatusChange = async (orderId, currentStatus, nextStatus) => {
+    const normalizedCurrent = (currentStatus || '').toLowerCase();
+
+    if (nextStatus === 'pending' || nextStatus === normalizedCurrent) {
+      return;
+    }
+
+    if (nextStatus === 'accepted') {
+      await acceptOrder(orderId);
+      return;
+    }
+
+    if (nextStatus === 'completed') {
+      await completeOrder(orderId);
+    }
+  };
+
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
 
@@ -148,6 +153,11 @@ export default function Orders({ showToast }) {
     onPageChange,
     totalItems,
   } = usePagination(filtered, 10);
+
+  const orderItems = useMemo(() => {
+    if (!viewingOrderId) return [];
+    return orders.filter(order => order.order_id === viewingOrderId);
+  }, [orders, viewingOrderId]);
 
   if (loading) {
     return (
@@ -219,18 +229,24 @@ export default function Orders({ showToast }) {
                     <th>CUSTOMER</th>
                     <th>CODE</th>
                     <th>PHONE</th>
-                    <th>ITEM CODE</th>
-                    <th>ITEM NAME</th>
-                    <th>QTY</th>
-                    <th>RATE</th>
-                    <th>STATUS</th>
+                    <th>ITEMS</th>
                     <th>DATE</th>
-                    <th>ACTION</th>
+                    <th>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentItems.map((row) => {
-                    const statusVariant = getStatusVariant(row.status);
+                    const status = (row.status || '').toLowerCase();
+                    const actionValue =
+                      status === 'accepted' ? 'accepted' :
+                      (status === 'completed' || status === 'complete') ? 'completed' :
+                      'pending';
+                    const actionSelectClass =
+                      actionValue === 'accepted'
+                        ? 'orders-action-select--accepted'
+                        : actionValue === 'completed'
+                          ? 'orders-action-select--completed'
+                          : 'orders-action-select--pending';
 
                     return (
                       <tr key={row.order_id}>
@@ -238,11 +254,15 @@ export default function Orders({ showToast }) {
                         <td title={`${row.customer_name} (${row.customer_code})`}><OrderCell title={row.customer_name || '—'} sub={row.customer_code || '—'} /></td>
                         <td title={row.customer_code}>{row.customer_code || '—'}</td>
                         <td title={row.phone_number}>{row.phone_number || '—'}</td>
-                        <td title={row.item_code}>{row.item_code || '—'}</td>
-                        <td title={row.item_name}><OrderCell title={row.item_name || '—'} sub={row.barcode || '—'} /></td>
-                        <td title={row.quantity}>{row.quantity ?? 0}</td>
-                        <td className="orders-table__rate" title={`₹ ${Number(row.rate || 0).toLocaleString('en-IN')}`}>₹ {Number(row.rate || 0).toLocaleString('en-IN')}</td>
-                        <td><Badge variant={statusVariant}>{row.status || '—'}</Badge></td>
+                        <td>
+                          <button
+                            className="orders-view-btn"
+                            onClick={() => setViewingOrderId(row.order_id)}
+                            title="View all items"
+                          >
+                            👁️ View Items
+                          </button>
+                        </td>
                         <td title={row.created_at}>
                           {row.created_at ? (
                             <div className="orders-date-stack">
@@ -255,29 +275,17 @@ export default function Orders({ showToast }) {
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
-                            {row.status?.toLowerCase() === 'pending' ? (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => acceptOrder(row.order_id)}
-                                disabled={actionLoading === row.order_id}
-                                title="Accept this order"
-                              >
-                                {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-fg)" /> : 'Accept'}
-                              </Button>
-                            ) : row.status?.toLowerCase() === 'accepted' ? (
-                              <Button
-                                size="sm"
-                                variant="primary"
-                                onClick={() => completeOrder(row.order_id)}
-                                disabled={actionLoading === row.order_id}
-                                title="Complete this order"
-                              >
-                                {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-primary)" /> : 'Complete'}
-                              </Button>
-                            ) : (
-                              <span className="orders-actions__dash">—</span>
-                            )}
+                            <select
+                              className={`orders-action-select ${actionSelectClass}`}
+                              value={actionValue}
+                              onChange={(e) => handleStatusChange(row.order_id, row.status, e.target.value)}
+                              disabled={actionLoading === row.order_id}
+                              title="Update order status"
+                            >
+                              <option value="pending">Pending</option>
+                              <option value="accepted">Accept</option>
+                              <option value="completed">Completed</option>
+                            </select>
                           </div>
                         </td>
                       </tr>
@@ -295,6 +303,39 @@ export default function Orders({ showToast }) {
           </div>
         )}
       </div>
+
+      {viewingOrderId && (
+        <div className="orders-modal-overlay" onClick={() => setViewingOrderId(null)}>
+          <div className="orders-modal" onClick={(e) => e.stopPropagation()}>
+            <div className="orders-modal-header">
+              <h2>Order Items - {viewingOrderId}</h2>
+              <button className="orders-modal-close" onClick={() => setViewingOrderId(null)}>✕</button>
+            </div>
+            <div className="orders-modal-body">
+              <table className="orders-modal-table">
+                <thead>
+                  <tr>
+                    <th>ITEM CODE</th>
+                    <th>ITEM NAME</th>
+                    <th>QTY</th>
+                    <th>RATE</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {orderItems.map((item, idx) => (
+                    <tr key={idx}>
+                      <td>{item.item_code || '—'}</td>
+                      <td><OrderCell title={item.item_name || '—'} sub={item.barcode || '—'} /></td>
+                      <td>{item.quantity ?? 0}</td>
+                      <td>₹ {Number(item.rate || 0).toLocaleString('en-IN')}</td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      )}
 
       <style>{`
         .orders-toolbar {
@@ -458,36 +499,18 @@ export default function Orders({ showToast }) {
         .orders-table td:nth-child(4),
         .orders-table th:nth-child(5),
         .orders-table td:nth-child(5) {
-          width: 8%;
+          width: 12%;
         }
 
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 18%;
+          width: 14%;
         }
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
-          width: 6%;
+          width: 14%;
         }
-
-        .orders-table th:nth-child(8),
-        .orders-table td:nth-child(8) {
-          width: 6%;
-        }
-
-        .orders-table th:nth-child(9),
-        .orders-table td:nth-child(9) {
-          width: 8%;
-
-        .orders-table th:nth-child(10),
-        .orders-table td:nth-child(10) {
-          width: 8%;
-
-        .orders-table th:nth-child(11),
-        .orders-table td:nth-child(11) {
-          width: 10%;
-          }
 
         .orders-table__action {
           overflow: visible !important;
@@ -533,9 +556,146 @@ export default function Orders({ showToast }) {
           white-space: nowrap;
         }
 
-        .orders-actions__dash {
-          color: var(--color-muted-fg);
+        .orders-action-select {
+          min-width: 130px;
+          padding: 8px 10px;
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          background: var(--color-card);
+          color: var(--color-fg);
+          font-size: var(--text-sm);
+          font-weight: var(--weight-medium);
+          cursor: pointer;
+          transition: border-color var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease);
+        }
+
+        .orders-action-select:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px var(--color-primary-ring);
+        }
+
+        .orders-action-select--pending {
+          background: rgba(245, 158, 11, 0.14);
+          border-color: rgba(245, 158, 11, 0.35);
+          color: #92400e;
+        }
+
+        .orders-action-select--accepted {
+          background: rgba(37, 99, 235, 0.12);
+          border-color: rgba(37, 99, 235, 0.35);
+          color: #1d4ed8;
+        }
+
+        .orders-action-select--completed {
+          background: rgba(34, 197, 94, 0.14);
+          border-color: rgba(34, 197, 94, 0.35);
+          color: #166534;
+        }
+
+        .orders-view-btn {
+          padding: 6px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          background: var(--color-card);
+          color: var(--color-fg);
+          font-size: var(--text-sm);
+          font-weight: var(--weight-medium);
+          cursor: pointer;
+          transition: all var(--duration-base) var(--ease);
+          white-space: nowrap;
+        }
+
+        .orders-view-btn:hover {
+          background: var(--color-primary);
+          color: white;
+          border-color: var(--color-primary);
+        }
+
+        .orders-modal-overlay {
+          position: fixed;
+          top: 0;
+          left: 0;
+          right: 0;
+          bottom: 0;
+          background: rgba(0, 0, 0, 0.5);
+          display: flex;
+          align-items: center;
+          justify-content: center;
+          z-index: 1000;
+        }
+
+        .orders-modal {
+          background: var(--color-card);
+          border-radius: var(--radius-lg);
+          width: 90%;
+          max-width: 800px;
+          max-height: 80vh;
+          display: flex;
+          flex-direction: column;
+          box-shadow: 0 20px 25px -5px rgba(0, 0, 0, 0.1), 0 10px 10px -5px rgba(0, 0, 0, 0.04);
+        }
+
+        .orders-modal-header {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          padding: var(--space-5);
+          border-bottom: 1px solid var(--color-border);
+        }
+
+        .orders-modal-header h2 {
+          margin: 0;
+          font-size: var(--text-xl);
           font-weight: var(--weight-semibold);
+          color: var(--color-fg);
+        }
+
+        .orders-modal-close {
+          background: none;
+          border: none;
+          font-size: 24px;
+          color: var(--color-muted-fg);
+          cursor: pointer;
+          padding: 4px 8px;
+          line-height: 1;
+          transition: color var(--duration-base) var(--ease);
+        }
+
+        .orders-modal-close:hover {
+          color: var(--color-fg);
+        }
+
+        .orders-modal-body {
+          padding: var(--space-5);
+          overflow-y: auto;
+        }
+
+        .orders-modal-table {
+          width: 100%;
+          border-collapse: collapse;
+        }
+
+        .orders-modal-table th {
+          text-align: left;
+          padding: 0.75rem;
+          font-size: var(--text-xs);
+          font-weight: var(--weight-semibold);
+          color: var(--color-muted-fg);
+          letter-spacing: 0.05em;
+          text-transform: uppercase;
+          border-bottom: 1px solid var(--color-border);
+        }
+
+        .orders-modal-table td {
+          padding: 0.75rem;
+          border-bottom: 1px solid var(--color-border);
+          color: var(--color-fg);
+          font-size: var(--text-base);
+        }
+
+        .orders-modal-table tbody tr:hover {
+          background: rgba(0, 0, 0, 0.015);
         }
 
         .orders-page {

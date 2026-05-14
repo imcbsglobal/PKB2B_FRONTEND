@@ -55,6 +55,19 @@ export default function Customers() {
     return customers.filter((c) => c.name?.toLowerCase().includes(term) || c.city?.toLowerCase().includes(term) || c.place?.toLowerCase().includes(term) || c.code?.toLowerCase().includes(term) || c.phone?.includes(search) || c.phone2?.includes(search));
   }, [customers, search]);
 
+  const sortedCustomers = useMemo(() => {
+    return [...filteredCustomers].sort((a, b) => {
+      const nameA = a.name?.trim() || '';
+      const nameB = b.name?.trim() || '';
+
+      if (!nameA && !nameB) return 0;
+      if (!nameA) return 1;
+      if (!nameB) return -1;
+
+      return nameA.localeCompare(nameB, undefined, { sensitivity: 'base' });
+    });
+  }, [filteredCustomers]);
+
   return (
     <div className="page customer-page">
       <div className="customer-toolbar">
@@ -65,10 +78,10 @@ export default function Customers() {
         <div className="item-loading-wrap">
           <LoadingSkeleton rows={5} columns={8} />
         </div>
-      ) : filteredCustomers.length === 0 ? (
+      ) : sortedCustomers.length === 0 ? (
         <EmptyState icon="👥" title="No customers found" description={search ? `No customers matching "${search}"` : 'No customers available'} />
       ) : (
-        <CustomerTable rows={filteredCustomers} />
+        <CustomerTable rows={sortedCustomers} />
       )}
     </div>
   );
