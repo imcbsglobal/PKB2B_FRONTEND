@@ -6,5 +6,15 @@ export default defineConfig({
   plugins: [react()],
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') }
+  },
+  server: {
+    proxy: {
+      '/api': {
+        target: 'https://pkb2backend.myimc.in',
+        changeOrigin: true,
+        secure: false,
+        rewrite: (path) => path,
+      }
+    }
   }
 })

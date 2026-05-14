@@ -225,26 +225,25 @@ export default function Orders({ showToast }) {
                         <td className="orders-table__action">
                           <div className="orders-actions">
                             {row.status?.toLowerCase() === 'pending' ? (
-                              <>
-                                <Button
-                                  size="sm"
-                                  variant="primary"
-                                  onClick={() => acceptOrder(row.order_id)}
-                                  disabled={actionLoading === row.order_id}
-                                  title="Accept this order"
-                                >
-                                  {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-fg)" /> : 'Accept'}
-                                </Button>
-                                <Button
-                                  size="sm"
-                                  variant="outline"
-                                  onClick={() => completeOrder(row.order_id)}
-                                  disabled={actionLoading === row.order_id}
-                                  title="Complete this order"
-                                >
-                                  {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-primary)" /> : 'Complete'}
-                                </Button>
-                              </>
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => acceptOrder(row.order_id)}
+                                disabled={actionLoading === row.order_id}
+                                title="Accept this order"
+                              >
+                                {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-fg)" /> : 'Accept'}
+                              </Button>
+                            ) : row.status?.toLowerCase() === 'accepted' ? (
+                              <Button
+                                size="sm"
+                                variant="primary"
+                                onClick={() => completeOrder(row.order_id)}
+                                disabled={actionLoading === row.order_id}
+                                title="Complete this order"
+                              >
+                                {actionLoading === row.order_id ? <Spinner size="sm" color="var(--color-primary)" /> : 'Complete'}
+                              </Button>
                             ) : (
                               <span className="orders-actions__dash">—</span>
                             )}
@@ -433,7 +432,7 @@ export default function Orders({ showToast }) {
 
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 12%;
+          width: 14%;
         }
 
         .orders-table th:nth-child(7),
@@ -442,7 +441,9 @@ export default function Orders({ showToast }) {
         }
 
         .orders-table th:nth-child(8),
-        .orders-table td:nth-child(8),
+        .orders-table td:nth-child(8),{
+          width: 10%;
+        }
         .orders-table th:nth-child(9),
         .orders-table td:nth-child(9) {
           width: 6%;
@@ -460,7 +461,7 @@ export default function Orders({ showToast }) {
 
         .orders-table th:nth-child(12),
         .orders-table td:nth-child(12) {
-          width: 16%;
+          width: 10%;
         }
 
         .orders-table__action {

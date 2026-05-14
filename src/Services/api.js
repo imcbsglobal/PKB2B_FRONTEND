@@ -1,6 +1,32 @@
 
 const API_BASE_URL =
-  'https://pkb2backend.myimc.in/api';
+  import.meta.env.DEV
+    ? '/api'
+    : 'https://pkb2backend.myimc.in/api';
+
+const BACKEND_URL = 'https://pkb2backend.myimc.in/api';
+
+export const resolveMediaUrl = (value) => {
+  if (!value) return '';
+
+  if (typeof value !== 'string') {
+    return value?.url || value?.image || '';
+  }
+
+  if (/^https?:\/\//i.test(value)) {
+    return value;
+  }
+
+  if (value.startsWith('//')) {
+    return `https:${value}`;
+  }
+
+  if (value.startsWith('/')) {
+    return `https://pkb2backend.myimc.in${value}`;
+  }
+
+  return `${API_BASE_URL}${value.startsWith('media/') ? `/${value}` : value}`;
+};
 
 const buildUrl = (path) =>
   `${API_BASE_URL}${path}`;
@@ -280,19 +306,13 @@ export const bannerAPI = {
   getBanners: () =>
     apiClient.get('/banners/'),
 
-  // UPLOAD BANNER
+  // UPLOAD BANNER (Create or Update)
   uploadBanner: (formData) =>
-
-    apiClient.post(
-      '/banners/upload/',
-      formData,
-      {
-        headers: {
-          'Content-Type':
-            'multipart/form-data',
-        },
-      }
-    ),
+    request('/banners/upload/', {
+      method: 'POST',
+      data: formData,
+      isFormData: true,
+    }),
 
   // DELETE BANNER
   deleteBanner: (id) =>

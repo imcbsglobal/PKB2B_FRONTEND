@@ -651,7 +651,6 @@
 }
 
 /* Page-level titles are now shown only in the top navbar */
-.page__header,
 .page__title,
 .page__sub {
   display: none !important;
