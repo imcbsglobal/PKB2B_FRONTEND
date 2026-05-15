@@ -1,10 +1,11 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, memo } from 'react';
 
 import Input from '../components/Input';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
 import { productBatchAPI } from '../Services/api';
 import { useFetchData } from '../hooks/useFetchData';
+import { usePagination } from '../hooks/usePagination';
 
 const STATUS_FILTERS = [
   { id: 'all', label: 'All' },
@@ -24,7 +25,7 @@ function getStockLabel(quantity) {
   return 'In stock';
 }
 
-function ItemCard({ item }) {
+function ItemCardBase({ item }) {
   const tone = getStockTone(item.quantity);
 
   return (
@@ -55,6 +56,8 @@ function ItemCard({ item }) {
     </article>
   );
 }
+
+const ItemCard = memo(ItemCardBase);
 
 function ToggleButton({ active, icon, label, onClick }) {
   return (
@@ -113,6 +116,13 @@ export default function Item() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
   const [layout, setLayout] = useState('grid');
+  const [brandQuery, setBrandQuery] = useState('');
+  const [categoryQuery, setCategoryQuery] = useState('');
+  const [selectedBrands, setSelectedBrands] = useState([]);
+  const [selectedCategories, setSelectedCategories] = useState([]);
+  const [brandOpen, setBrandOpen] = useState(false);
+  const [categoryOpen, setCategoryOpen] = useState(false);
+  const [itemsPerPage] = useState(30);
 
   const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
   const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
@@ -151,6 +161,31 @@ export default function Item() {
     });
   }, [items, search, statusFilter]);
 
+  const uniqueBrands = useMemo(() => {
+    const set = new Set();
+    items.forEach((it) => it.brand && set.add(it.brand));
+    return Array.from(set).sort();
+  }, [items]);
+
+  const uniqueCategories = useMemo(() => {
+    const set = new Set();
+    items.forEach((it) => it.product && set.add(it.product));
+    return Array.from(set).sort();
+  }, [items]);
+
+  // extend filteredItems with brand/category selections
+  const finalItems = useMemo(() => {
+    return filteredItems.filter((item) => {
+      if (selectedBrands.length > 0 && !selectedBrands.includes(item.brand)) return false;
+      if (selectedCategories.length > 0 && !selectedCategories.includes(item.product)) return false;
+      return true;
+    });
+  }, [filteredItems, selectedBrands, selectedCategories]);
+
+  // Paginate final items for better performance
+  const pagination = usePagination(finalItems, itemsPerPage);
+  const paginatedItems = pagination.currentItems;
+
   return (
     <div className="page item-page">
       <div className="item-toolbar">
@@ -184,6 +219,52 @@ export default function Item() {
         </div>
 
         <div className="item-toolbar__right">
+          <div className="item-toolbar__filters-inline">
+            <div className="multi-filter">
+              <button type="button" className="multi-filter__button" onClick={() => setBrandOpen((s) => !s)} aria-expanded={brandOpen}>
+                Brand{selectedBrands.length > 0 ? ` (${selectedBrands.length})` : ''}
+              </button>
+              {brandOpen && (
+                <div className="multi-filter__panel">
+                  <Input className="multi-filter__search" placeholder="Search brands..." value={brandQuery} onChange={(e) => setBrandQuery(e.target.value)} />
+                  <div className="multi-filter__list">
+                    {uniqueBrands.filter(b => b.toLowerCase().includes(brandQuery.trim().toLowerCase())).map((b) => (
+                      <label key={b} className="multi-filter__option">
+                        <input type="checkbox" checked={selectedBrands.includes(b)} onChange={(e) => {
+                          if (e.target.checked) setSelectedBrands((s) => [...s, b]);
+                          else setSelectedBrands((s) => s.filter(x => x !== b));
+                        }} />
+                        <span>{b}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            <div className="multi-filter">
+              <button type="button" className="multi-filter__button" onClick={() => setCategoryOpen((s) => !s)} aria-expanded={categoryOpen}>
+                Category{selectedCategories.length > 0 ? ` (${selectedCategories.length})` : ''}
+              </button>
+              {categoryOpen && (
+                <div className="multi-filter__panel">
+                  <Input className="multi-filter__search" placeholder="Search categories..." value={categoryQuery} onChange={(e) => setCategoryQuery(e.target.value)} />
+                  <div className="multi-filter__list">
+                    {uniqueCategories.filter(c => c.toLowerCase().includes(categoryQuery.trim().toLowerCase())).map((c) => (
+                      <label key={c} className="multi-filter__option">
+                        <input type="checkbox" checked={selectedCategories.includes(c)} onChange={(e) => {
+                          if (e.target.checked) setSelectedCategories((s) => [...s, c]);
+                          else setSelectedCategories((s) => s.filter(x => x !== c));
+                        }} />
+                        <span>{c}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+
           <div className="item-view-switch" aria-label="View mode">
             <ToggleButton
               active={layout === 'grid'}
@@ -221,20 +302,38 @@ export default function Item() {
         <div className="item-loading-wrap">
           <LoadingSkeleton rows={5} columns={6} />
         </div>
-      ) : filteredItems.length === 0 ? (
+      ) : finalItems.length === 0 ? (
         <EmptyState
           icon="🛍️"
           title="No items found"
           description={search ? `No items matching "${search}"` : 'No items available'}
         />
       ) : layout === 'grid' ? (
-        <div className="item-grid">
-          {filteredItems.map((item) => (
-            <ItemCard key={item.id || item.code || item.name} item={item} />
-          ))}
-        </div>
+          <>
+            <div className="item-grid">
+              {paginatedItems.map((item) => (
+                <ItemCard key={item.id || item.code || item.name} item={item} />
+              ))}
+            </div>
+            {pagination.totalPages > 1 && (
+              <div className="item-pagination">
+                <button disabled={pagination.currentPage === 1} onClick={() => pagination.onPageChange(pagination.currentPage - 1)} className="item-pagination__btn">← Prev</button>
+                <span className="item-pagination__info">Page {pagination.currentPage} of {pagination.totalPages}</span>
+                <button disabled={pagination.currentPage === pagination.totalPages} onClick={() => pagination.onPageChange(pagination.currentPage + 1)} className="item-pagination__btn">Next →</button>
+              </div>
+            )}
+          </>
       ) : (
-        <ItemTable rows={filteredItems} />
+        <>
+          <ItemTable rows={paginatedItems} />
+          {pagination.totalPages > 1 && (
+            <div className="item-pagination">
+              <button disabled={pagination.currentPage === 1} onClick={() => pagination.onPageChange(pagination.currentPage - 1)} className="item-pagination__btn">← Prev</button>
+              <span className="item-pagination__info">Page {pagination.currentPage} of {pagination.totalPages}</span>
+              <button disabled={pagination.currentPage === pagination.totalPages} onClick={() => pagination.onPageChange(pagination.currentPage + 1)} className="item-pagination__btn">Next →</button>
+            </div>
+          )}
+        </>
       )}
     </div>
   );
