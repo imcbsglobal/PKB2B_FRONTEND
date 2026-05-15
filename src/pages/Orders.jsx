@@ -81,7 +81,13 @@ export default function Orders({ showToast }) {
     setActionLoading(orderId);
     try {
       await orderAPI.acceptOrder(orderId);
-      refreshOrders();
+      // Update cached orders locally so UI updates without showing global loading
+      const cached = dataCache.get('orders') || orders;
+      const updated = Array.isArray(cached)
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: 'accepted' } : o))
+        : cached;
+      dataCache.set('orders', updated);
+      setRefreshKey(v => v + 1);
       showToast?.('Order accepted successfully!', 'success');
     } catch (error) {
       console.error('Accept Order Error:', error);
@@ -95,7 +101,13 @@ export default function Orders({ showToast }) {
     setActionLoading(orderId);
     try {
       await orderAPI.completeOrder(orderId);
-      refreshOrders();
+      // Update cached orders locally so UI updates without showing global loading
+      const cached = dataCache.get('orders') || orders;
+      const updated = Array.isArray(cached)
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: 'completed' } : o))
+        : cached;
+      dataCache.set('orders', updated);
+      setRefreshKey(v => v + 1);
       showToast?.('Order completed successfully!', 'success');
     } catch (error) {
       console.error('Complete Order Error:', error);
@@ -132,15 +144,25 @@ export default function Orders({ showToast }) {
         (filter === 'Pending' && status === 'pending') ||
         (filter === 'Completed' && (status === 'complete' || status === 'completed'));
 
-      const matchesSearch =
-        !term ||
-        order.order_id?.toLowerCase().includes(term) ||
-        order.customer_name?.toLowerCase().includes(term) ||
-        order.customer_code?.toLowerCase().includes(term) ||
-        order.phone_number?.toLowerCase().includes(term) ||
-        order.item_code?.toLowerCase().includes(term) ||
-        order.item_name?.toLowerCase().includes(term) ||
-        order.barcode?.toLowerCase().includes(term);
+
+      const matchesSearch = (() => {
+        if (!term) return true;
+        if (order.order_id?.toLowerCase().includes(term)) return true;
+        if (order.customer_name?.toLowerCase().includes(term)) return true;
+        if (order.customer_code?.toLowerCase().includes(term)) return true;
+        if (order.phone_number?.toLowerCase().includes(term)) return true;
+
+        // Search within products array if present
+        if (Array.isArray(order.products)) {
+          for (const p of order.products) {
+            if (p?.item_code?.toLowerCase().includes(term)) return true;
+            if (p?.item_name?.toLowerCase().includes(term)) return true;
+            if (p?.barcode?.toLowerCase().includes(term)) return true;
+          }
+        }
+
+        return false;
+      })();
 
       return matchesFilter && matchesSearch;
     });
@@ -156,7 +178,25 @@ export default function Orders({ showToast }) {
 
   const orderItems = useMemo(() => {
     if (!viewingOrderId) return [];
-    return orders.filter(order => order.order_id === viewingOrderId);
+    const sel = orders.find((o) => o.order_id === viewingOrderId);
+    if (!sel) return [];
+    // Prefer `products` array from API, but handle older flat structure too
+    if (Array.isArray(sel.products)) return sel.products;
+
+    // fallback to older properties if present
+    if (sel.item_code || sel.item_name) {
+      return [
+        {
+          item_code: sel.item_code,
+          item_name: sel.item_name,
+          barcode: sel.barcode,
+          quantity: sel.quantity,
+          rate: sel.rate,
+        },
+      ];
+    }
+
+    return [];
   }, [orders, viewingOrderId]);
 
   if (loading) {
@@ -260,7 +300,8 @@ export default function Orders({ showToast }) {
                             onClick={() => setViewingOrderId(row.order_id)}
                             title="View all items"
                           >
-                            👁️ View Items
+                            <i className="fa-solid fa-eye" aria-hidden="true" style={{ marginRight: 8 }}></i>
+                            View Items
                           </button>
                         </td>
                         <td title={row.created_at}>
