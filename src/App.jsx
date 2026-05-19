@@ -14,7 +14,6 @@ const Orders             = lazy(() => import('./pages/Orders'));
 const Notification       = lazy(() => import('./pages/Notification'));
 const Item               = lazy(() => import('./pages/Item'));
 const Brand              = lazy(() => import('./pages/Brand'));
-const Inventory          = lazy(() => import('./pages/Inventory'));
 const Banner             = lazy(() => import('./pages/Banner'));
 const Banneradd          = lazy(() => import('./pages/Banneradd'));
 const Login              = lazy(() => import('./pages/Login'));
@@ -30,7 +29,6 @@ const PAGES = {
   brands:              Brand,
   banner:              Banner,
   banneradd:           Banneradd,
-  inventory:           Inventory,
 };
 
 export default function App() {

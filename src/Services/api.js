@@ -239,6 +239,15 @@ export const productBatchAPI = {
     apiClient.get(
       '/productbatchphoto/'
     ),
+
+  updateProductStatus: (barcode, status) =>
+    apiClient.post(
+      '/product/status/',
+      {
+        barcode,
+        status,
+      }
+    ),
 };
 
 // ================= CATEGORIES =================

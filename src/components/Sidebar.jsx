@@ -87,17 +87,7 @@ const NAV_SECTIONS = [
           </svg>
         ),
       },
-      {
-        id: 'inventory',
-        label: 'Inventory',
-        icon: (
-          <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-            <path d="M3 22V8l9-5 9 5v14" />
-            <path d="M9 22V12h6v10" />
-            <path d="M9 17h6" />
-          </svg>
-        ),
-      },
+      
     ],
   },
   {

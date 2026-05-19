@@ -1,4 +1,4 @@
-import React, { useMemo, useState, memo } from 'react';
+import React, { useMemo, useState, memo, useCallback } from 'react';
 
 import Input from '../components/Input';
 import LoadingSkeleton from '../components/LoadingSkeleton';
@@ -45,6 +45,8 @@ function ItemCardBase({ item }) {
           <div className="item-card__price">₹ {Number(item.price || 0).toLocaleString('en-IN')}</div>
         </div>
 
+        {item.barcode && <div className="item-card__barcode" style={{ fontSize: '11px', color: '#9ca3af', marginBottom: '8px' }}>📦 {item.barcode}</div>}
+        
         <div className="item-card__meta">{item.brand || 'N/A'} · {item.product || 'N/A'}</div>
         <div className="item-card__code">{item.code || 'N/A'}</div>
 
@@ -67,7 +69,7 @@ function ToggleButton({ active, icon, label, onClick }) {
   );
 }
 
-function ItemTable({ rows }) {
+function ItemTable({ rows, onStatusChange }) {
   return (
     <div className="table-wrap item-table-wrap">
       <table className="data-table item-table">
@@ -79,6 +81,7 @@ function ItemTable({ rows }) {
             <th>BRAND</th>
             <th>CATEGORY</th>
             <th style={{ textAlign: 'right' }}>PRICE</th>
+            <th style={{ textAlign: 'right' }}>MRP</th>
             <th>STOCK</th>
             <th>STATUS</th>
           </tr>
@@ -95,13 +98,35 @@ function ItemTable({ rows }) {
                   </div>
                 </td>
                 <td className="item-table__code">{item.code || 'N/A'}</td>
-                <td className="item-table__name">{item.name || 'N/A'}</td>
+                <td className="item-table__name">
+                  <div className="item-name-wrapper">
+                    <div>{item.name || 'N/A'}</div>
+                    {item.barcode && <div className="item-barcode-sub" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Barcode: {item.barcode}</div>}
+                  </div>
+                </td>
                 <td>{item.brand || 'N/A'}</td>
                 <td>{item.product || 'N/A'}</td>
                 <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.price || 0).toLocaleString('en-IN')}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.bmrp || 0).toLocaleString('en-IN')}</td>
                 <td>{item.quantity ?? 0}</td>
                 <td>
-                  <span className={`item-status item-status--${tone}`}>{getStockLabel(item.quantity)}</span>
+                  <select 
+                    value={item.product_status || 'Active'} 
+                    onChange={(e) => onStatusChange(item, e.target.value)}
+                    style={{
+                      padding: '6px 10px',
+                      borderRadius: '4px',
+                      border: '1px solid #ddd',
+                      fontSize: '13px',
+                      fontWeight: '500',
+                      cursor: 'pointer',
+                      backgroundColor: item.product_status === 'Active' ? '#dcfce7' : '#fee2e2',
+                      color: item.product_status === 'Active' ? '#166534' : '#991b1b',
+                    }}
+                  >
+                    <option value="Active">Active</option>
+                    <option value="Inactive">Inactive</option>
+                  </select>
                 </td>
               </tr>
             );
@@ -123,13 +148,43 @@ export default function Item() {
   const [brandOpen, setBrandOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [itemsPerPage] = useState(30);
+  const [localItems, setLocalItems] = useState([]);
 
   const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
   const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
   const loading = itemsResult.loading;
 
+  // Sync localItems when items change
+  React.useEffect(() => {
+    setLocalItems(items);
+  }, [items]);
+
+  // Handle product status change
+  const handleStatusChange = useCallback(async (item, newStatus) => {
+    try {
+      // Update local state immediately for UI feedback
+      setLocalItems(prevItems =>
+        prevItems.map(i =>
+          i.barcode === item.barcode ? { ...i, product_status: newStatus } : i
+        )
+      );
+
+      // Make API call to update backend
+      await productBatchAPI.updateProductStatus(item.barcode, newStatus);
+    } catch (error) {
+      console.error('Failed to update product status:', error);
+      // Revert on error
+      setLocalItems(prevItems =>
+        prevItems.map(i =>
+          i.barcode === item.barcode ? { ...i, product_status: item.product_status } : i
+        )
+      );
+      alert('Failed to update product status. Please try again.');
+    }
+  }, []);
+
   const counts = useMemo(() => {
-    return items.reduce(
+    return localItems.reduce(
       (acc, item) => {
         acc.all += 1;
         if ((item.quantity || 0) <= 0) acc.outOfStock += 1;
@@ -138,12 +193,12 @@ export default function Item() {
       },
       { all: 0, inStock: 0, outOfStock: 0 }
     );
-  }, [items]);
+  }, [localItems]);
 
   const filteredItems = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return items.filter((item) => {
+    return localItems.filter((item) => {
       const matchesSearch =
         !term ||
         item.name?.toLowerCase().includes(term) ||
@@ -159,19 +214,19 @@ export default function Item() {
 
       return matchesSearch && matchesStatus;
     });
-  }, [items, search, statusFilter]);
+  }, [localItems, search, statusFilter]);
 
   const uniqueBrands = useMemo(() => {
     const set = new Set();
-    items.forEach((it) => it.brand && set.add(it.brand));
+    localItems.forEach((it) => it.brand && set.add(it.brand));
     return Array.from(set).sort();
-  }, [items]);
+  }, [localItems]);
 
   const uniqueCategories = useMemo(() => {
     const set = new Set();
-    items.forEach((it) => it.product && set.add(it.product));
+    localItems.forEach((it) => it.product && set.add(it.product));
     return Array.from(set).sort();
-  }, [items]);
+  }, [localItems]);
 
   // extend filteredItems with brand/category selections
   const finalItems = useMemo(() => {
@@ -325,7 +380,7 @@ export default function Item() {
           </>
       ) : (
         <>
-          <ItemTable rows={paginatedItems} />
+          <ItemTable rows={paginatedItems} onStatusChange={handleStatusChange} />
           {pagination.totalPages > 1 && (
             <div className="item-pagination">
               <button disabled={pagination.currentPage === 1} onClick={() => pagination.onPageChange(pagination.currentPage - 1)} className="item-pagination__btn">← Prev</button>
