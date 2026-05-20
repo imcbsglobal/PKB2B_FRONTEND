@@ -628,7 +628,7 @@
 .orders-export-btn:hover {
   background: var(--color-primary-hover, oklch(0.46 0.15 45));
   transform: translateY(-1px);
-  box-shadow: 0 4px 8px var(--color-primary / 0.2);
+  box-shadow: 0 4px 8px rgba(206, 180, 32, 0.2);
 }
 
 .orders-export-btn--small {

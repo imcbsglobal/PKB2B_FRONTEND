@@ -90,7 +90,7 @@ export default function Banner({ onNavigate, refreshTrigger }) {
 
     try {
 
-      await bannerAPI.deleteBanner(id);
+      await bannerAPI.deleteBanner(id);   
 
       fetchBanners();
 
