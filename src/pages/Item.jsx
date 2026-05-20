@@ -9,6 +9,8 @@ import { usePagination } from '../hooks/usePagination';
 
 const STATUS_FILTERS = [
   { id: 'all', label: 'All' },
+  { id: 'active', label: 'Active' },
+  { id: 'inactive', label: 'Inactive' },
   { id: 'in-stock', label: 'In stock' },
   { id: 'out-of-stock', label: 'Out of stock' },
 ];
@@ -76,14 +78,16 @@ function ItemTable({ rows, onStatusChange }) {
         <thead>
           <tr>
             <th>IMAGE</th>
+            <th>STATUS</th>
             <th>CODE</th>
             <th>ITEM NAME</th>
-            <th>BRAND</th>
             <th>CATEGORY</th>
-            <th style={{ textAlign: 'right' }}>PRICE</th>
-            <th style={{ textAlign: 'right' }}>MRP</th>
+            <th>PRODUCT</th>
+            <th>BRAND</th>
             <th>STOCK</th>
-            <th>STATUS</th>
+            <th style={{ textAlign: 'right' }}>MRP</th>
+            <th style={{ textAlign: 'right' }}>PRICE</th>
+            <th>PRICE TYPE</th>
           </tr>
         </thead>
         <tbody>
@@ -97,18 +101,6 @@ function ItemTable({ rows, onStatusChange }) {
                     {item.url2 ? <img src={item.url2} alt={item.name || 'Item'} loading="lazy" /> : <span>No Image</span>}
                   </div>
                 </td>
-                <td className="item-table__code">{item.code || 'N/A'}</td>
-                <td className="item-table__name">
-                  <div className="item-name-wrapper">
-                    <div>{item.name || 'N/A'}</div>
-                    {item.barcode && <div className="item-barcode-sub" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Barcode: {item.barcode}</div>}
-                  </div>
-                </td>
-                <td>{item.brand || 'N/A'}</td>
-                <td>{item.product || 'N/A'}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.price || 0).toLocaleString('en-IN')}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.bmrp || 0).toLocaleString('en-IN')}</td>
-                <td>{item.quantity ?? 0}</td>
                 <td>
                   <select 
                     value={item.product_status || 'Active'} 
@@ -128,6 +120,20 @@ function ItemTable({ rows, onStatusChange }) {
                     <option value="Inactive">Inactive</option>
                   </select>
                 </td>
+                <td className="item-table__code">{item.code || 'N/A'}</td>
+                <td className="item-table__name">
+                  <div className="item-name-wrapper">
+                    <div>{item.name || 'N/A'}</div>
+                    {item.barcode && <div className="item-barcode-sub" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Barcode: {item.barcode}</div>}
+                  </div>
+                </td>
+                <td>{item.product || 'N/A'}</td>
+                <td>{item.product || 'N/A'}</td>
+                <td>{item.brand || 'N/A'}</td>
+                <td>{item.quantity ?? 0}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.bmrp || 0).toLocaleString('en-IN')}</td>
+                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.price || 0).toLocaleString('en-IN')}</td>
+                <td style={{ textAlign: 'center' }}>{item.price_type || 'N/A'}</td>
               </tr>
             );
           })}
@@ -140,7 +146,7 @@ function ItemTable({ rows, onStatusChange }) {
 export default function Item() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('all');
-  const [layout, setLayout] = useState('grid');
+  const [layout, setLayout] = useState('table');
   const [brandQuery, setBrandQuery] = useState('');
   const [categoryQuery, setCategoryQuery] = useState('');
   const [selectedBrands, setSelectedBrands] = useState([]);
@@ -149,6 +155,7 @@ export default function Item() {
   const [categoryOpen, setCategoryOpen] = useState(false);
   const [itemsPerPage] = useState(30);
   const [localItems, setLocalItems] = useState([]);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
   const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
   const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
@@ -189,9 +196,11 @@ export default function Item() {
         acc.all += 1;
         if ((item.quantity || 0) <= 0) acc.outOfStock += 1;
         else acc.inStock += 1;
+        if (item.product_status === 'Active') acc.active += 1;
+        else if (item.product_status === 'Inactive') acc.inactive += 1;
         return acc;
       },
-      { all: 0, inStock: 0, outOfStock: 0 }
+      { all: 0, inStock: 0, outOfStock: 0, active: 0, inactive: 0 }
     );
   }, [localItems]);
 
@@ -204,11 +213,14 @@ export default function Item() {
         item.name?.toLowerCase().includes(term) ||
         item.code?.toLowerCase().includes(term) ||
         item.brand?.toLowerCase().includes(term) ||
-        item.product?.toLowerCase().includes(term);
+        item.product?.toLowerCase().includes(term) ||
+        item.barcode?.toLowerCase().includes(term);
 
       const stockTone = getStockTone(item.quantity);
       const matchesStatus =
         statusFilter === 'all' ||
+        (statusFilter === 'active' && item.product_status === 'Active') ||
+        (statusFilter === 'inactive' && item.product_status === 'Inactive') ||
         (statusFilter === 'in-stock' && stockTone === 'success') ||
         (statusFilter === 'out-of-stock' && stockTone === 'danger');
 
@@ -245,24 +257,41 @@ export default function Item() {
     <div className="page item-page">
       <div className="item-toolbar">
         <div className="item-toolbar__left">
-          <div className="item-filters" role="tablist" aria-label="Item filters">
-            {STATUS_FILTERS.map((filter) => {
-              const count = filter.id === 'all' ? counts.all : filter.id === 'in-stock' ? counts.inStock : counts.outOfStock;
-              const active = statusFilter === filter.id;
+          <div className="status-filter-dropdown">
+            <button 
+              type="button" 
+              className="status-filter-dropdown__button"
+              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+              aria-expanded={filterDropdownOpen}
+            >
+              Filter: {STATUS_FILTERS.find(f => f.id === statusFilter)?.label}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {filterDropdownOpen && (
+              <div className="status-filter-dropdown__menu">
+                {STATUS_FILTERS.map((filter) => {
+                  const count = filter.id === 'all' ? counts.all : filter.id === 'active' ? counts.active : filter.id === 'inactive' ? counts.inactive : filter.id === 'in-stock' ? counts.inStock : counts.outOfStock;
+                  const active = statusFilter === filter.id;
 
-              return (
-                <button
-                  key={filter.id}
-                  type="button"
-                  className={`item-filter ${active ? 'item-filter--active' : ''}`}
-                  onClick={() => setStatusFilter(filter.id)}
-                  aria-pressed={active}
-                >
-                  <span>{filter.label}</span>
-                  <span className="item-filter__count">{count}</span>
-                </button>
-              );
-            })}
+                  return (
+                    <button
+                      key={filter.id}
+                      type="button"
+                      className={`status-filter-dropdown__item ${active ? 'status-filter-dropdown__item--active' : ''}`}
+                      onClick={() => {
+                        setStatusFilter(filter.id);
+                        setFilterDropdownOpen(false);
+                      }}
+                    >
+                      <span>{filter.label}</span>
+                      <span className="status-filter-dropdown__count">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
           <Input
@@ -299,7 +328,7 @@ export default function Item() {
 
             <div className="multi-filter">
               <button type="button" className="multi-filter__button" onClick={() => setCategoryOpen((s) => !s)} aria-expanded={categoryOpen}>
-                Category{selectedCategories.length > 0 ? ` (${selectedCategories.length})` : ''}
+                Product{selectedCategories.length > 0 ? ` (${selectedCategories.length})` : ''}
               </button>
               {categoryOpen && (
                 <div className="multi-filter__panel">

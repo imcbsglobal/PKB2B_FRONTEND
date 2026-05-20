@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import { bannerAPI, resolveMediaUrl } from '../Services/api';
+import { bannerAPI } from '../Services/api';
 
 export default function Banneradd({
   onBannerAdded,
@@ -12,8 +12,7 @@ export default function Banneradd({
 
   const [formData, setFormData] = useState({
     title: '',
-    subtitle: '',
-    url: '',
+    caption: '',
     images: [],
   });
 
@@ -38,23 +37,16 @@ export default function Banneradd({
           bannerToEdit.meta?.title ||
           bannerToEdit.data?.title ||
           '',
-        subtitle:
+        caption:
+          bannerToEdit.body ||
           bannerToEdit.subtitle ||
           bannerToEdit.description ||
           bannerToEdit.sub_text ||
+          bannerToEdit.caption ||
           '',
-        url: bannerToEdit.url || bannerToEdit.link || '',
         images: [],
       });
-
-      const imageUrl = resolveMediaUrl(
-        bannerToEdit.image ||
-        bannerToEdit.image_url ||
-        bannerToEdit.banner_image ||
-        bannerToEdit.banner_image_url
-      );
-      
-      setImagePreviews(imageUrl ? [imageUrl] : []);
+      setImagePreviews([]);
     }
 
   }, [bannerToEdit]);
@@ -137,14 +129,21 @@ export default function Banneradd({
 
     if (!formData.title.trim()) {
 
-      setError('Banner title is required');
+      setError('Offer Title is required');
+
+      return;
+    }
+
+    if (!formData.caption.trim()) {
+
+      setError('Caption is required');
 
       return;
     }
 
     if (!bannerToEdit && formData.images.length === 0) {
 
-      setError('Banner image is required');
+      setError('Image is required');
 
       return;
     }
@@ -154,22 +153,15 @@ export default function Banneradd({
       setLoading(true);
 
       const data = new FormData();
-
       data.append('title', formData.title.trim());
-      
-      if (formData.subtitle.trim()) {
-        data.append('subtitle', formData.subtitle.trim());
-      }
-      
-      if (formData.url.trim()) {
-        data.append('url', formData.url.trim());
-      }
+      data.append('body', formData.caption.trim());
 
-      // Append image file (single file, not array)
+      // Append image file if provided
       if (formData.images.length > 0) {
         data.append('image', formData.images[0]);
       }
 
+      // Call the banner API to save
       if (bannerToEdit) {
         data.append('id', bannerToEdit.id);
       }
@@ -177,7 +169,7 @@ export default function Banneradd({
       await bannerAPI.uploadBanner(data);
 
       showToast?.(
-        bannerToEdit ? 'Banner updated successfully!' : 'Banner added successfully!',
+        bannerToEdit ? 'Offer Zone updated successfully!' : 'Offer Zone added successfully!',
         'success'
       );
 
@@ -185,33 +177,16 @@ export default function Banneradd({
 
     } catch (error) {
 
-      console.error('Upload Banner Error:', {
-        status: error.response?.status,
-        data: error.response?.data,
-        message: error.message,
-        error: error,
-      });
+      console.error('Save Offer Zone Error:', error);
 
-      let errorMsg = 'Failed to upload banner';
+      let errorMsg = 'Failed to save offer zone';
       
       if (error.message === 'Failed to fetch' || error.message.includes('Connection failed')) {
-        errorMsg = 'Connection error: Unable to reach the server. Please check your internet connection and ensure the backend is running.';
-      } else if (error.message?.includes('CORS')) {
-        errorMsg = 'CORS Error: Backend not configured for cross-origin requests.';
-      } else if (error.response?.status === 413) {
-        errorMsg = 'File too large: Please select an image smaller than 1MB.';
-      } else if (error.response?.status === 415) {
-        errorMsg = 'Unsupported file type: Please upload a valid image file (JPG, PNG, GIF).';
-      } else if (error.response?.status === 403) {
-        errorMsg = 'Access Denied: Please login again.';
+        errorMsg = 'Connection error: Unable to reach the server.';
       } else if (error.response?.status === 400) {
-        errorMsg = error.response?.data?.detail || error.response?.data?.message || 'Invalid banner data. Please check all fields.';
+        errorMsg = error.response?.data?.detail || error.response?.data?.message || 'Invalid offer zone data.';
       } else if (error.response?.status === 500) {
-        errorMsg = 'Server error: Please try again later or contact support.';
-      } else if (error.response?.data?.detail) {
-        errorMsg = error.response.data.detail;
-      } else if (error.response?.data?.message) {
-        errorMsg = error.response.data.message;
+        errorMsg = 'Server error: Please try again later.';
       }
 
       setError(errorMsg);
@@ -232,8 +207,8 @@ export default function Banneradd({
 
         <h1 className="page__title">
           {bannerToEdit
-            ? 'Edit Banner'
-            : 'Add Banner'}
+            ? 'Edit Offer Zone'
+            : 'Add Offer Zone'}
         </h1>
 
       </div>
@@ -253,27 +228,19 @@ export default function Banneradd({
           )}
 
           <Input
-            label="Banner Title"
+            label="Offer Title"
             name="title"
             value={formData.title}
             onChange={handleInputChange}
-            placeholder="Enter title"
+            placeholder="Enter offer title"
           />
 
           <Input
-            label="Subtitle"
-            name="subtitle"
-            value={formData.subtitle}
+            label="Caption"
+            name="caption"
+            value={formData.caption}
             onChange={handleInputChange}
-            placeholder="Enter subtitle"
-          />
-
-          <Input
-            label="URL"
-            name="url"
-            value={formData.url}
-            onChange={handleInputChange}
-            placeholder="https://example.com"
+            placeholder="Enter caption"
           />
 
           <div style={{
@@ -282,38 +249,97 @@ export default function Banneradd({
           }}>
 
             <label className="field__label">
-              Banner Image
+              Image
             </label>
 
-            <input
-              type="file"
-              accept="image/*"
-              onChange={handleImageChange}
-            />
+            <div style={{
+              position: 'relative',
+              border: '2px dashed #e5e7eb',
+              borderRadius: '8px',
+              padding: '32px 16px',
+              textAlign: 'center',
+              backgroundColor: '#f9fafb',
+              cursor: 'pointer',
+              transition: 'all 0.3s ease',
+              marginTop: '8px',
+            }}
+            onDragOver={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = '#f59e0b';
+              e.currentTarget.style.backgroundColor = '#fffbf0';
+            }}
+            onDragLeave={(e) => {
+              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.backgroundColor = '#f9fafb';
+            }}
+            onDrop={(e) => {
+              e.preventDefault();
+              e.currentTarget.style.borderColor = '#e5e7eb';
+              e.currentTarget.style.backgroundColor = '#f9fafb';
+              const files = e.dataTransfer.files;
+              if (files.length > 0) {
+                handleImageChange({ target: { files } });
+              }
+            }}
+            >
+              <input
+                ref={(input) => {
+                  if (input) {
+                    input.style.display = 'none';
+                  }
+                }}
+                id="image-upload"
+                type="file"
+                accept="image/*"
+                onChange={handleImageChange}
+                style={{ display: 'none' }}
+              />
+              <label htmlFor="image-upload" style={{ cursor: 'pointer', display: 'block' }}>
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="none" stroke="#9ca3af" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ margin: '0 auto 8px' }}>
+                  <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4" />
+                  <polyline points="17 8 12 3 7 8" />
+                  <line x1="12" y1="3" x2="12" y2="15" />
+                </svg>
+                <div style={{ fontSize: '14px', fontWeight: '500', color: '#1f2937', marginBottom: '4px' }}>
+                  Click to upload or drag and drop
+                </div>
+                <div style={{ fontSize: '12px', color: '#6b7280' }}>
+                  PNG, JPG, GIF up to 1MB
+                </div>
+              </label>
+            </div>
 
           </div>
 
           {imagePreviews.length > 0 && (
 
             <div style={{
-              display: 'grid',
-              gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-              gap: '12px',
               marginBottom: '16px',
+              marginTop: '16px',
             }}>
-              {imagePreviews.map((preview, index) => (
-                <img
-                  key={`${preview}-${index}`}
-                  src={preview}
-                  alt={`Preview ${index + 1}`}
-                  style={{
-                    width: '100%',
-                    height: '140px',
-                    objectFit: 'cover',
-                    borderRadius: '8px',
-                  }}
-                />
-              ))}
+              <label className="field__label" style={{ marginBottom: '8px' }}>
+                Preview
+              </label>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: '1fr',
+                gap: '12px',
+              }}>
+                {imagePreviews.map((preview, index) => (
+                  <img
+                    key={`${preview}-${index}`}
+                    src={preview}
+                    alt={`Preview ${index + 1}`}
+                    style={{
+                      width: '100%',
+                      height: '240px',
+                      objectFit: 'cover',
+                      borderRadius: '8px',
+                      border: '1px solid #e5e7eb',
+                    }}
+                  />
+                ))}
+              </div>
             </div>
 
           )}
@@ -329,8 +355,8 @@ export default function Banneradd({
               loading={loading}
             >
               {bannerToEdit
-                ? 'Update Banner'
-                : 'Add Banner'}
+                ? 'Update Offer Zone'
+                : 'Add Offer Zone'}
             </Button>
 
             <Button

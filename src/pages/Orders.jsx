@@ -12,6 +12,7 @@ import { dataCache } from '../utils/cache';
 const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Pending', label: 'Pending' },
+  { id: 'Accepted', label: 'Accepted' },
   { id: 'Completed', label: 'Complete' },
 ];
 
@@ -54,6 +55,10 @@ export default function Orders({ showToast }) {
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [viewingOrderId, setViewingOrderId] = useState(null);
+  const [dateFrom, setDateFrom] = useState('');
+  const [dateTo, setDateTo] = useState('');
+  const [itemsPerPage, setItemsPerPage] = useState(10);
+  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
@@ -65,16 +70,63 @@ export default function Orders({ showToast }) {
         acc.all += 1;
         const status = (order.status || '').toLowerCase();
         if (status === 'pending') acc.pending += 1;
+        if (status === 'accepted') acc.accepted += 1;
         if (status === 'complete' || status === 'completed') acc.completed += 1;
         return acc;
       },
-      { all: 0, pending: 0, completed: 0 }
+      { all: 0, pending: 0, accepted: 0, completed: 0 }
     );
   }, [orders]);
 
   const refreshOrders = () => {
     dataCache.clear('orders');
     setRefreshKey((value) => value + 1);
+  };
+
+  const exportToExcel = () => {
+    if (filtered.length === 0) {
+      showToast?.('No data to export', 'warning');
+      return;
+    }
+
+    // Prepare data for export
+    const exportData = filtered.map((order) => ({
+      'Order ID': order.order_id || '—',
+      'Customer Name': order.customer_name || '—',
+      'Customer Code': order.customer_code || '—',
+      'Phone': order.phone_number || '—',
+      'Date': order.created_at ? formatDateToDDMMYYYY(order.created_at) : '—',
+      'Time': order.created_at ? formatTimeTo12Hour(order.created_at) : '—',
+      'Status': order.status || '—',
+    }));
+
+    // Create CSV content
+    const headers = Object.keys(exportData[0]);
+    let csvContent = headers.join(',') + '\n';
+
+    exportData.forEach((row) => {
+      const values = headers.map((header) => {
+        let value = row[header];
+        if (typeof value === 'string' && (value.includes(',') || value.includes('"'))) {
+          value = '"' + value.replace(/"/g, '""') + '"';
+        }
+        return value;
+      });
+      csvContent += values.join(',') + '\n';
+    });
+
+    // Create blob and download
+    const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+    const link = document.createElement('a');
+    const url = URL.createObjectURL(blob);
+    link.setAttribute('href', url);
+    link.setAttribute('download', `orders_${new Date().toISOString().slice(0, 10)}.csv`);
+    link.style.visibility = 'hidden';
+    document.body.appendChild(link);
+    link.click();
+    document.body.removeChild(link);
+
+    showToast?.(`Exported ${filtered.length} orders to Excel`, 'success');
   };
 
   const acceptOrder = async (orderId) => {
@@ -142,8 +194,23 @@ export default function Orders({ showToast }) {
       const matchesFilter =
         filter === 'All' ||
         (filter === 'Pending' && status === 'pending') ||
+        (filter === 'Accepted' && status === 'accepted') ||
         (filter === 'Completed' && (status === 'complete' || status === 'completed'));
 
+      // Date filtering
+      let matchesDate = true;
+      if (dateFrom || dateTo) {
+        const orderDate = new Date(order.created_at);
+        if (dateFrom) {
+          const fromDate = new Date(dateFrom);
+          matchesDate = matchesDate && orderDate >= fromDate;
+        }
+        if (dateTo) {
+          const toDate = new Date(dateTo);
+          toDate.setHours(23, 59, 59, 999);
+          matchesDate = matchesDate && orderDate <= toDate;
+        }
+      }
 
       const matchesSearch = (() => {
         if (!term) return true;
@@ -164,9 +231,9 @@ export default function Orders({ showToast }) {
         return false;
       })();
 
-      return matchesFilter && matchesSearch;
+      return matchesFilter && matchesSearch && matchesDate;
     });
-  }, [orders, search, filter]);
+  }, [orders, search, filter, dateFrom, dateTo]);
 
   const {
     currentPage,
@@ -174,7 +241,7 @@ export default function Orders({ showToast }) {
     currentItems,
     onPageChange,
     totalItems,
-  } = usePagination(filtered, 10);
+  } = usePagination(filtered, itemsPerPage);
 
   const orderItems = useMemo(() => {
     if (!viewingOrderId) return [];
@@ -217,39 +284,119 @@ export default function Orders({ showToast }) {
       <div className="orders-page-header">
         <div>
           <h1 className="page__title">Orders</h1>
-          <p className="page__sub">{filtered.length} orders found</p>
+          <p className="page__sub">{filtered.length} order{filtered.length !== 1 ? 's' : ''} found • Total: {totalItems} rows</p>
         </div>
       </div>
 
       <div className="orders-card">
         <div className="orders-toolbar">
-          <div className="orders-filters" role="tablist" aria-label="Order filters">
-            {FILTERS.map((item) => {
-              const count = item.id === 'All' ? counts.all : item.id === 'Pending' ? counts.pending : counts.completed;
+          <div className="order-filter-dropdown">
+            <button 
+              type="button" 
+              className="order-filter-dropdown__button"
+              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
+              aria-expanded={filterDropdownOpen}
+            >
+              Filter: {FILTERS.find(f => f.id === filter)?.label}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {filterDropdownOpen && (
+              <div className="order-filter-dropdown__menu">
+                {FILTERS.map((item) => {
+                  let count = 0;
+                  if (item.id === 'All') count = counts.all;
+                  else if (item.id === 'Pending') count = counts.pending;
+                  else if (item.id === 'Accepted') count = counts.accepted;
+                  else if (item.id === 'Completed') count = counts.completed;
 
-              return (
-                <button
-                  key={item.id}
-                  type="button"
-                  className={`orders-filter-btn ${filter === item.id ? 'orders-filter-btn--active' : ''}`}
-                  onClick={() => setFilter(item.id)}
-                  aria-pressed={filter === item.id}
-                >
-                  <span>{item.label}</span>
-                  <span className="orders-filter-btn__count">{count}</span>
-                </button>
-              );
-            })}
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`order-filter-dropdown__item ${filter === item.id ? 'order-filter-dropdown__item--active' : ''}`}
+                      onClick={() => {
+                        setFilter(item.id);
+                        setFilterDropdownOpen(false);
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span className="order-filter-dropdown__count">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
           </div>
 
-          <div className="orders-search-wrap">
-            <span className="orders-search-icon">⌕</span>
-            <input
-              className="orders-search-input"
-              placeholder="Search orders..."
-              value={search}
-              onChange={(e) => setSearch(e.target.value)}
-            />
+          <div className="orders-rowcount-mini">
+            <select 
+              className="orders-rowcount-mini-select" 
+              value={itemsPerPage === totalItems ? 'all' : itemsPerPage}
+              onChange={(e) => {
+                if (e.target.value === 'all') {
+                  setItemsPerPage(totalItems || 10);
+                } else {
+                  setItemsPerPage(parseInt(e.target.value, 10));
+                }
+              }}
+              title="Rows per page"
+            >
+              <option value="10">10</option>
+              <option value="20">20</option>
+              <option value="30">30</option>
+              <option value="all">All</option>
+            </select>
+          </div>
+
+          <div className="orders-right-controls">
+            <div className="orders-date-filters">
+              <input
+                type="date"
+                className="orders-date-input"
+                value={dateFrom}
+                onChange={(e) => setDateFrom(e.target.value)}
+                placeholder="From date"
+                title="Filter from date"
+              />
+              <span className="orders-date-separator">—</span>
+              <input
+                type="date"
+                className="orders-date-input"
+                value={dateTo}
+                onChange={(e) => setDateTo(e.target.value)}
+                placeholder="To date"
+                title="Filter to date"
+              />
+              {(dateFrom || dateTo) && (
+                <button
+                  className="orders-date-clear"
+                  onClick={() => {
+                    setDateFrom('');
+                    setDateTo('');
+                  }}
+                  title="Clear date filters"
+                >
+                  ✕
+                </button>
+              )}
+            </div>
+
+            <div className="orders-search-wrap">
+              <span className="orders-search-icon">⌕</span>
+              <input
+                className="orders-search-input"
+                placeholder="Search orders..."
+                value={search}
+                onChange={(e) => setSearch(e.target.value)}
+              />
+            </div>
+
+            <button className="orders-export-btn orders-export-btn--small" onClick={exportToExcel} title="Export to Excel">
+              <i className="fa-solid fa-download" style={{ marginRight: 4 }}></i>
+              Export
+            </button>
           </div>
         </div>
 
@@ -260,17 +407,18 @@ export default function Orders({ showToast }) {
             description={search ? `No orders matching "${search}"` : 'No orders yet. Check back later!'}
           />
         ) : (
-          <div className="orders-table-wrap">
+          <>
+            <div className="orders-table-wrap">
             <div className="orders-table-scroll">
               <table className="orders-table">
-                <thead>
+                <thead className="orders-table-head-sticky">
                   <tr>
                     <th>ORDER ID</th>
-                    <th>CUSTOMER</th>
-                    <th>CODE</th>
-                    <th>PHONE</th>
-                    <th>ITEMS</th>
                     <th>DATE</th>
+                    <th>CODE</th>
+                    <th>CUSTOMER</th>
+                    <th>NUMBER</th>
+                    <th>ITEM</th>
                     <th>STATUS</th>
                   </tr>
                 </thead>
@@ -291,8 +439,18 @@ export default function Orders({ showToast }) {
                     return (
                       <tr key={row.order_id}>
                         <td className="orders-table__id" title={row.order_id}>{row.order_id || '—'}</td>
-                        <td title={`${row.customer_name} (${row.customer_code})`}><OrderCell title={row.customer_name || '—'} sub={row.customer_code || '—'} /></td>
+                        <td title={row.created_at}>
+                          {row.created_at ? (
+                            <div className="orders-date-stack">
+                              <div>{formatDateToDDMMYYYY(row.created_at)}</div>
+                              <div className="orders-date-stack__time">{formatTimeTo12Hour(row.created_at)}</div>
+                            </div>
+                          ) : (
+                            '—'
+                          )}
+                        </td>
                         <td title={row.customer_code}>{row.customer_code || '—'}</td>
+                        <td title={`${row.customer_name} (${row.customer_code})`}><OrderCell title={row.customer_name || '—'} sub={row.customer_code || '—'} /></td>
                         <td title={row.phone_number}>{row.phone_number || '—'}</td>
                         <td>
                           <button
@@ -303,16 +461,6 @@ export default function Orders({ showToast }) {
                             <i className="fa-solid fa-eye" aria-hidden="true" style={{ marginRight: 8 }}></i>
                             View Items
                           </button>
-                        </td>
-                        <td title={row.created_at}>
-                          {row.created_at ? (
-                            <div className="orders-date-stack">
-                              <div>{formatDateToDDMMYYYY(row.created_at)}</div>
-                              <div className="orders-date-stack__time">{formatTimeTo12Hour(row.created_at)}</div>
-                            </div>
-                          ) : (
-                            '—'
-                          )}
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
@@ -335,13 +483,19 @@ export default function Orders({ showToast }) {
                 </tbody>
               </table>
             </div>
-            <Pagination
-              currentPage={currentPage}
-              totalItems={totalItems}
-              itemsPerPage={10}
-              onPageChange={onPageChange}
-            />
-          </div>
+            </div>
+            <div className="orders-footer">
+              <div className="orders-rowcount-info">
+                Showing {currentItems.length > 0 ? (currentPage - 1) * itemsPerPage + 1 : 0} - {Math.min(currentPage * itemsPerPage, totalItems)} of {totalItems} rows
+              </div>
+              <Pagination
+                currentPage={currentPage}
+                totalItems={totalItems}
+                itemsPerPage={itemsPerPage}
+                onPageChange={onPageChange}
+              />
+            </div>
+          </>
         )}
       </div>
 
@@ -386,8 +540,8 @@ export default function Orders({ showToast }) {
           gap: var(--space-4);
           padding: var(--space-4) var(--space-5);
           border-bottom: 1px solid var(--color-border);
-          flex-wrap: nowrap;
-          min-height: 60px;
+          flex-wrap: wrap;
+          min-height: auto;
         }
 
         .orders-filters {
@@ -400,6 +554,65 @@ export default function Orders({ showToast }) {
           padding: 3px;
           flex-shrink: 0;
           white-space: nowrap;
+        }
+
+        .orders-right-controls {
+          display: flex;
+          align-items: center;
+          gap: var(--space-3);
+          flex: 1;
+          min-width: 0;
+          justify-content: flex-end;
+          flex-wrap: wrap;
+        }
+
+        .orders-date-filters {
+          display: flex;
+          align-items: center;
+          gap: 8px;
+          padding: 8px 12px;
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          background: var(--color-card);
+          flex-shrink: 0;
+        }
+
+        .orders-date-input {
+          padding: 6px 8px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-card);
+          color: var(--color-fg);
+          font-size: var(--text-sm);
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+          transition: border-color var(--duration-base) var(--ease);
+        }
+
+        .orders-date-input:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px var(--color-primary-ring);
+        }
+
+        .orders-date-separator {
+          color: var(--color-muted-fg);
+          font-size: var(--text-sm);
+          opacity: 0.5;
+        }
+
+        .orders-date-clear {
+          padding: 4px 6px;
+          border: none;
+          background: transparent;
+          color: var(--color-muted-fg);
+          cursor: pointer;
+          font-size: 16px;
+          transition: color var(--duration-base) var(--ease);
+        }
+
+        .orders-date-clear:hover {
+          color: var(--color-fg);
         }
 
         .orders-filter-btn {
@@ -438,7 +651,6 @@ export default function Orders({ showToast }) {
           flex: 0 1 auto;
           min-width: 200px;
           max-width: 350px;
-          margin-left: auto;
           flex-shrink: 0;
         }
 
@@ -474,19 +686,90 @@ export default function Orders({ showToast }) {
           box-shadow: 0 0 0 3px var(--color-primary-ring);
         }
 
+        .orders-export-btn {
+          padding: 0.75rem 1rem;
+          border: 1px solid var(--color-border);
+          border-radius: 8px;
+          background: var(--color-primary);
+          color: white;
+          font-size: var(--text-sm);
+          font-weight: var(--weight-medium);
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+          transition: all var(--duration-base) var(--ease);
+          display: inline-flex;
+          align-items: center;
+          gap: 6px;
+          white-space: nowrap;
+          flex-shrink: 0;
+        }
+
+        .orders-export-btn:hover {
+          background: var(--color-primary-dark, #0d47a1);
+          transform: translateY(-1px);
+          box-shadow: 0 4px 6px rgba(0, 0, 0, 0.1);
+        }
+
+        .orders-export-btn:active {
+          transform: translateY(0);
+        }
+
+        .orders-rowcount-mini {
+          display: flex;
+          align-items: center;
+          flex-shrink: 0;
+        }
+
+        .orders-rowcount-mini-select {
+          padding: 6px 8px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-card);
+          color: var(--color-fg);
+          font-size: var(--text-sm);
+          font-weight: var(--weight-medium);
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+          transition: border-color var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease);
+          min-width: 70px;
+        }
+
+        .orders-rowcount-mini-select:hover {
+          border-color: var(--color-primary);
+        }
+
+        .orders-rowcount-mini-select:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px var(--color-primary-ring);
+        }
+
         .orders-table-wrap {
           width: 100%;
           overflow: hidden;
+          display: flex;
+          flex-direction: column;
+          flex: 1;
         }
 
         .orders-table-scroll {
+          overflow-y: auto;
           overflow-x: auto;
+          height: 500px;
+          flex: 1;
         }
 
         .orders-table {
           width: 100%;
           border-collapse: collapse;
           table-layout: fixed;
+        }
+
+        .orders-table-head-sticky {
+          position: sticky;
+          top: 0;
+          background: var(--color-card);
+          z-index: 10;
         }
 
         .orders-table th {
@@ -501,6 +784,7 @@ export default function Orders({ showToast }) {
           white-space: nowrap;
           overflow: hidden;
           text-overflow: ellipsis;
+          background: var(--color-card);
         }
 
         .orders-table td {
@@ -531,7 +815,7 @@ export default function Orders({ showToast }) {
 
         .orders-table th:nth-child(2),
         .orders-table td:nth-child(2) {
-          width: 12%;
+          width: 14%;
         }
 
         .orders-table th:nth-child(3),
@@ -539,13 +823,10 @@ export default function Orders({ showToast }) {
         .orders-table th:nth-child(4),
         .orders-table td:nth-child(4),
         .orders-table th:nth-child(5),
-        .orders-table td:nth-child(5) {
-          width: 12%;
-        }
-
+        .orders-table td:nth-child(5),
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 14%;
+          width: 12%;
         }
 
         .orders-table th:nth-child(7),
@@ -653,6 +934,69 @@ export default function Orders({ showToast }) {
           border-color: var(--color-primary);
         }
 
+        .orders-top-section {
+          display: flex;
+          align-items: center;
+          padding: var(--space-4) var(--space-5);
+          border-bottom: 1px solid var(--color-border);
+          background: var(--color-card);
+        }
+
+        .orders-rowcount-control {
+          display: flex;
+          align-items: center;
+          gap: 10px;
+          flex-shrink: 0;
+        }
+
+        .orders-rowcount-label {
+          font-size: var(--text-sm);
+          color: var(--color-muted-fg);
+          font-weight: var(--weight-medium);
+          white-space: nowrap;
+        }
+
+        .orders-rowcount-select {
+          padding: 6px 10px;
+          border: 1px solid var(--color-border);
+          border-radius: 6px;
+          background: var(--color-card);
+          color: var(--color-fg);
+          font-size: var(--text-sm);
+          font-weight: var(--weight-medium);
+          font-family: 'Inter', sans-serif;
+          cursor: pointer;
+          transition: border-color var(--duration-base) var(--ease), box-shadow var(--duration-base) var(--ease);
+          min-width: 80px;
+        }
+
+        .orders-rowcount-select:hover {
+          border-color: var(--color-primary);
+        }
+
+        .orders-rowcount-select:focus {
+          outline: none;
+          border-color: var(--color-primary);
+          box-shadow: 0 0 0 3px var(--color-primary-ring);
+        }
+
+        .orders-footer {
+          display: flex;
+          align-items: center;
+          justify-content: space-between;
+          gap: var(--space-4);
+          padding: var(--space-4) var(--space-5);
+          border-top: 1px solid var(--color-border);
+          flex-wrap: wrap;
+        }
+
+        .orders-rowcount-info {
+          font-size: var(--text-sm);
+          color: var(--color-muted-fg);
+          font-weight: var(--weight-medium);
+          white-space: nowrap;
+        }
+
         .orders-modal-overlay {
           position: fixed;
           top: 0;
@@ -710,6 +1054,7 @@ export default function Orders({ showToast }) {
         .orders-modal-body {
           padding: var(--space-5);
           overflow-y: auto;
+          max-height: calc(80vh - 80px);
         }
 
         .orders-modal-table {
@@ -752,6 +1097,8 @@ export default function Orders({ showToast }) {
           border-radius: var(--radius-lg);
           background: var(--color-card);
           overflow: hidden;
+        }
+
         @media (max-width: 1024px) {
           .orders-toolbar {
             flex-wrap: wrap;
@@ -759,16 +1106,30 @@ export default function Orders({ showToast }) {
             min-height: auto;
           }
 
+          .orders-right-controls {
+            width: 100%;
+            justify-content: space-between;
+          }
+
           .orders-search-wrap {
             margin-left: 0;
             max-width: none;
             min-width: auto;
-            width: 100%;
             flex-shrink: 1;
           }
 
           .orders-filters {
             flex-wrap: wrap;
+          }
+
+          .orders-table-scroll {
+            height: 400px;
+          }
+
+          .orders-date-filters {
+            flex-wrap: wrap;
+            width: 100%;
+            justify-content: space-between;
           }
         }
       `}</style>

@@ -121,7 +121,7 @@ export default function Banner({ onNavigate, refreshTrigger }) {
       <div className="page">
 
         <div className="page__header">
-          <h1 className="page__title">Banners</h1>
+          <h1 className="page__title">Offer Zone</h1>
         </div>
 
         <div style={{
@@ -151,11 +151,11 @@ export default function Banner({ onNavigate, refreshTrigger }) {
           <div>
 
             <h1 className="page__title">
-              Banners
+              Offer Zone
             </h1>
 
             <p className="page__sub">
-              {banners.length} banner
+              {banners.length} offer zone
               {banners.length !== 1 ? 's' : ''}
               found
             </p>
@@ -167,7 +167,7 @@ export default function Banner({ onNavigate, refreshTrigger }) {
             size="md"
             onClick={handleAddBanner}
           >
-            + Add Banner
+            + Add Offer Zone
           </Button>
 
         </div>
@@ -204,35 +204,45 @@ export default function Banner({ onNavigate, refreshTrigger }) {
         <div style={{
           display: 'grid',
           gridTemplateColumns:
-            'repeat(auto-fill, minmax(220px, 1fr))',
-          gap: '16px',
+            'repeat(auto-fill, minmax(260px, 1fr))',
+          gap: '20px',
           padding: '20px 0',
         }}>
 
           {banners.map((banner) => {
             const displayTitle = getBannerTitle(banner) || 'Untitled Banner';
-            const displaySubtitle = banner.subtitle || banner.description || banner.sub_text || '';
+            const displaySubtitle = banner.body || banner.subtitle || banner.description || banner.sub_text || '';
 
             return (
               <div
                 key={banner.id}
                 style={{
                   backgroundColor: '#fff',
-                  border: '1px solid rgba(0,0,0,0.06)',
-                  borderRadius: '10px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '12px',
                   overflow: 'hidden',
                   display: 'flex',
                   flexDirection: 'column',
-                  boxShadow: '0 2px 8px rgba(12,12,12,0.04)',
+                  boxShadow: '0 1px 3px rgba(0,0,0,0.08)',
+                  transition: 'all 0.3s ease',
+                  cursor: 'pointer',
+                }}
+                onMouseEnter={(e) => {
+                  e.currentTarget.style.boxShadow = '0 4px 12px rgba(0,0,0,0.12)';
+                  e.currentTarget.style.transform = 'translateY(-2px)';
+                }}
+                onMouseLeave={(e) => {
+                  e.currentTarget.style.boxShadow = '0 1px 3px rgba(0,0,0,0.08)';
+                  e.currentTarget.style.transform = 'translateY(0)';
                 }}
               >
 
-                {/* Image with title overlay */}
+                {/* Image */}
                 <div style={{
                   width: '100%',
-                  height: '160px',
+                  height: '180px',
                   overflow: 'hidden',
-                  backgroundColor: '#f5f5f5',
+                  backgroundColor: '#f3f4f6',
                   position: 'relative',
                 }}>
 
@@ -256,75 +266,52 @@ export default function Banner({ onNavigate, refreshTrigger }) {
                       alignItems: 'center',
                       justifyContent: 'center',
                       height: '100%',
-                      color: '#777',
+                      color: '#9ca3af',
+                      fontSize: '14px',
+                      fontWeight: '500',
                     }}>
                       No Image
                     </div>
 
                   )}
 
-                  <div style={{
-                    position: 'absolute',
-                    left: 0,
-                    right: 0,
-                    bottom: 0,
-                    padding: '10px 12px',
-                    background: 'linear-gradient(180deg, rgba(0,0,0,0) 0%, rgba(0,0,0,0.5) 100%)',
-                    color: '#fff',
-                    display: 'flex',
-                    flexDirection: 'column',
-                    gap: '4px',
-                  }}>
-                    <div style={{
-                      fontSize: '15px',
-                      fontWeight: 600,
-                      textShadow: '0 1px 2px rgba(0,0,0,0.6)',
-                      whiteSpace: 'nowrap',
-                      overflow: 'hidden',
-                      textOverflow: 'ellipsis',
-                    }}>{displayTitle}</div>
-                    {displaySubtitle ? (
-                      <div style={{
-                        fontSize: '12px',
-                        opacity: 0.9,
-                      }}>{displaySubtitle}</div>
-                    ) : null}
-                  </div>
-
                 </div>
 
-                {/* Footer with actions */}
+                {/* Content and Actions */}
                 <div style={{
-                  padding: '12px',
+                  padding: '14px 16px',
+                  flex: 1,
                   display: 'flex',
-                  alignItems: 'center',
+                  flexDirection: 'column',
                   justifyContent: 'space-between',
                 }}>
 
-                  <div style={{
-                    fontSize: '13px',
-                    color: '#333',
-                    whiteSpace: 'nowrap',
-                    overflow: 'hidden',
-                    textOverflow: 'ellipsis',
-                    maxWidth: '60%',
-                  }}>{displayTitle}</div>
+                  <div>
+                    <div style={{
+                      fontSize: '14px',
+                      fontWeight: '600',
+                      color: '#1f2937',
+                      whiteSpace: 'nowrap',
+                      overflow: 'hidden',
+                      textOverflow: 'ellipsis',
+                      marginBottom: '6px',
+                    }}>{displayTitle}</div>
+                    {displaySubtitle && (
+                      <div style={{
+                        fontSize: '12px',
+                        color: '#6b7280',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        whiteSpace: 'nowrap',
+                      }}>{displaySubtitle}</div>
+                    )}
+                  </div>
 
                   <div style={{
                     display: 'flex',
                     gap: '8px',
-                    marginLeft: 'auto',
+                    marginTop: '12px',
                   }}>
-
-                    <Button
-                      size="sm"
-                      variant="primary"
-                      onClick={() =>
-                        handleEditBanner(banner)
-                      }
-                    >
-                      Edit
-                    </Button>
 
                     <Button
                       size="sm"
@@ -332,6 +319,7 @@ export default function Banner({ onNavigate, refreshTrigger }) {
                       onClick={() =>
                         handleDeleteBanner(banner.id)
                       }
+                      style={{ width: '100%' }}
                     >
                       Delete
                     </Button>
