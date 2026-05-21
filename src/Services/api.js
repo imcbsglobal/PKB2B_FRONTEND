@@ -293,10 +293,16 @@ export const orderAPI = {
       `/order/${orderId}/accept/`
     ),
 
-  // COMPLETE ORDER
-  completeOrder: (orderId) =>
+  // INVOICED ORDER
+  invoicedOrder: (orderId) =>
     apiClient.post(
-      `/order/${orderId}/complete/`
+      `/order/${orderId}/invoiced/`
+    ),
+
+  // DISPATCHED ORDER
+  dispatchedOrder: (orderId) =>
+    apiClient.post(
+      `/order/${orderId}/dispatched/`
     ),
 };
 

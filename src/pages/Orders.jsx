@@ -13,7 +13,8 @@ const FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Pending', label: 'Pending' },
   { id: 'Accepted', label: 'Accepted' },
-  { id: 'Completed', label: 'Complete' },
+  { id: 'Invoiced', label: 'Invoiced' },
+  { id: 'Dispatched', label: 'Dispatched' },
 ];
 
 function formatDateToDDMMYYYY(value) {
@@ -49,14 +50,42 @@ function OrderCell({ title, sub }) {
   );
 }
 
+function getTodayDate() {
+  const today = new Date();
+  return today.toISOString().split('T')[0];
+}
+
+/**
+ * Generate page size options dynamically based on total row count
+ * @param {number} total - Total number of rows
+ * @returns {number[]} Array of page size options (e.g., [10, 20, 30, ..., totalCount])
+ * 
+ * Examples:
+ * - Total 57 returns: [10, 20, 30, 40, 50, 57]
+ * - Total 120 returns: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+ */
+function generatePageSizeOptions(total) {
+  if (total <= 0) return [10];
+  
+  const options = [];
+  for (let i = 10; i < total; i += 10) {
+    options.push(i);
+  }
+  
+  // Always add the total count as the final option
+  options.push(total);
+  
+  return options;
+}
+
 export default function Orders({ showToast }) {
   const [filter, setFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
   const [viewingOrderId, setViewingOrderId] = useState(null);
-  const [dateFrom, setDateFrom] = useState('');
-  const [dateTo, setDateTo] = useState('');
+  const [dateFrom, setDateFrom] = useState(getTodayDate());
+  const [dateTo, setDateTo] = useState(getTodayDate());
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
@@ -71,10 +100,11 @@ export default function Orders({ showToast }) {
         const status = (order.status || '').toLowerCase();
         if (status === 'pending') acc.pending += 1;
         if (status === 'accepted') acc.accepted += 1;
-        if (status === 'complete' || status === 'completed') acc.completed += 1;
+        if (status === 'invoiced') acc.invoiced += 1;
+        if (status === 'dispatched') acc.dispatched += 1;
         return acc;
       },
-      { all: 0, pending: 0, accepted: 0, completed: 0 }
+      { all: 0, pending: 0, accepted: 0, invoiced: 0, dispatched: 0 }
     );
   }, [orders]);
 
@@ -132,11 +162,11 @@ export default function Orders({ showToast }) {
   const acceptOrder = async (orderId) => {
     setActionLoading(orderId);
     try {
-      await orderAPI.acceptOrder(orderId);
-      // Update cached orders locally so UI updates without showing global loading
+      const response = await orderAPI.acceptOrder(orderId);
+      // Update cached orders locally with the response data from API
       const cached = dataCache.get('orders') || orders;
       const updated = Array.isArray(cached)
-        ? cached.map(o => (o.order_id === orderId ? { ...o, status: 'accepted' } : o))
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: response.data.status } : o))
         : cached;
       dataCache.set('orders', updated);
       setRefreshKey(v => v + 1);
@@ -149,40 +179,67 @@ export default function Orders({ showToast }) {
     }
   };
 
-  const completeOrder = async (orderId) => {
+  const invoicedOrder = async (orderId) => {
     setActionLoading(orderId);
     try {
-      await orderAPI.completeOrder(orderId);
-      // Update cached orders locally so UI updates without showing global loading
+      const response = await orderAPI.invoicedOrder(orderId);
+      // Update cached orders locally with the response data from API
       const cached = dataCache.get('orders') || orders;
       const updated = Array.isArray(cached)
-        ? cached.map(o => (o.order_id === orderId ? { ...o, status: 'completed' } : o))
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: response.data.status } : o))
         : cached;
       dataCache.set('orders', updated);
       setRefreshKey(v => v + 1);
-      showToast?.('Order completed successfully!', 'success');
+      showToast?.('Order invoiced successfully!', 'success');
     } catch (error) {
-      console.error('Complete Order Error:', error);
-      showToast?.('Failed to complete order', 'error');
+      console.error('Invoiced Order Error:', error);
+      showToast?.('Failed to invoice order', 'error');
+    } finally {
+      setActionLoading(null);
+    }
+  };
+
+  const dispatchedOrder = async (orderId) => {
+    setActionLoading(orderId);
+    try {
+      const response = await orderAPI.dispatchedOrder(orderId);
+      // Update cached orders locally with the response data from API
+      const cached = dataCache.get('orders') || orders;
+      const updated = Array.isArray(cached)
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: response.data.status } : o))
+        : cached;
+      dataCache.set('orders', updated);
+      setRefreshKey(v => v + 1);
+      showToast?.('Order dispatched successfully!', 'success');
+    } catch (error) {
+      console.error('Dispatched Order Error:', error);
+      showToast?.('Failed to dispatch order', 'error');
     } finally {
       setActionLoading(null);
     }
   };
 
   const handleStatusChange = async (orderId, currentStatus, nextStatus) => {
-    const normalizedCurrent = (currentStatus || '').toLowerCase();
+    const normalizedCurrent = (currentStatus || '').toLowerCase().trim();
+    const normalizedNext = (nextStatus || '').toLowerCase().trim();
 
-    if (nextStatus === 'pending' || nextStatus === normalizedCurrent) {
+    // Don't allow changing to same status or to pending (can't go backwards)
+    if (normalizedNext === 'pending' || normalizedNext === normalizedCurrent) {
       return;
     }
 
-    if (nextStatus === 'accepted') {
+    if (normalizedNext === 'accepted') {
       await acceptOrder(orderId);
       return;
     }
 
-    if (nextStatus === 'completed') {
-      await completeOrder(orderId);
+    if (normalizedNext === 'invoiced') {
+      await invoicedOrder(orderId);
+      return;
+    }
+
+    if (normalizedNext === 'dispatched') {
+      await dispatchedOrder(orderId);
     }
   };
 
@@ -190,12 +247,13 @@ export default function Orders({ showToast }) {
     const term = search.trim().toLowerCase();
 
     return orders.filter((order) => {
-      const status = (order.status || '').toLowerCase();
+      const status = (order.status || '').toLowerCase().trim();
       const matchesFilter =
         filter === 'All' ||
         (filter === 'Pending' && status === 'pending') ||
         (filter === 'Accepted' && status === 'accepted') ||
-        (filter === 'Completed' && (status === 'complete' || status === 'completed'));
+        (filter === 'Invoiced' && status === 'invoiced') ||
+        (filter === 'Dispatched' && status === 'dispatched');
 
       // Date filtering
       let matchesDate = true;
@@ -309,7 +367,8 @@ export default function Orders({ showToast }) {
                   if (item.id === 'All') count = counts.all;
                   else if (item.id === 'Pending') count = counts.pending;
                   else if (item.id === 'Accepted') count = counts.accepted;
-                  else if (item.id === 'Completed') count = counts.completed;
+                  else if (item.id === 'Invoiced') count = counts.invoiced;
+                  else if (item.id === 'Dispatched') count = counts.dispatched;
 
                   return (
                     <button
@@ -333,20 +392,17 @@ export default function Orders({ showToast }) {
           <div className="orders-rowcount-mini">
             <select 
               className="orders-rowcount-mini-select" 
-              value={itemsPerPage === totalItems ? 'all' : itemsPerPage}
+              value={itemsPerPage}
               onChange={(e) => {
-                if (e.target.value === 'all') {
-                  setItemsPerPage(totalItems || 10);
-                } else {
-                  setItemsPerPage(parseInt(e.target.value, 10));
-                }
+                setItemsPerPage(parseInt(e.target.value, 10));
               }}
               title="Rows per page"
             >
-              <option value="10">10</option>
-              <option value="20">20</option>
-              <option value="30">30</option>
-              <option value="all">All</option>
+              {generatePageSizeOptions(totalItems).map((pageSize) => (
+                <option key={pageSize} value={pageSize}>
+                  {pageSize}
+                </option>
+              ))}
             </select>
           </div>
 
@@ -424,17 +480,20 @@ export default function Orders({ showToast }) {
                 </thead>
                 <tbody>
                   {currentItems.map((row) => {
-                    const status = (row.status || '').toLowerCase();
+                    const status = (row.status || '').toLowerCase().trim();
                     const actionValue =
                       status === 'accepted' ? 'accepted' :
-                      (status === 'completed' || status === 'complete') ? 'completed' :
+                      status === 'invoiced' ? 'invoiced' :
+                      status === 'dispatched' ? 'dispatched' :
                       'pending';
                     const actionSelectClass =
                       actionValue === 'accepted'
                         ? 'orders-action-select--accepted'
-                        : actionValue === 'completed'
-                          ? 'orders-action-select--completed'
-                          : 'orders-action-select--pending';
+                        : actionValue === 'invoiced'
+                          ? 'orders-action-select--invoiced'
+                          : actionValue === 'dispatched'
+                            ? 'orders-action-select--dispatched'
+                            : 'orders-action-select--pending';
 
                     return (
                       <tr key={row.order_id}>
@@ -473,7 +532,8 @@ export default function Orders({ showToast }) {
                             >
                               <option value="pending">Pending</option>
                               <option value="accepted">Accept</option>
-                              <option value="completed">Completed</option>
+                              <option value="invoiced">Invoice</option>
+                              <option value="dispatched">Dispatch</option>
                             </select>
                           </div>
                         </td>
@@ -909,7 +969,13 @@ export default function Orders({ showToast }) {
           color: #1d4ed8;
         }
 
-        .orders-action-select--completed {
+        .orders-action-select--invoiced {
+          background: rgba(139, 92, 246, 0.12);
+          border-color: rgba(139, 92, 246, 0.35);
+          color: #6d28d9;
+        }
+
+        .orders-action-select--dispatched {
           background: rgba(34, 197, 94, 0.14);
           border-color: rgba(34, 197, 94, 0.35);
           color: #166534;

@@ -9,34 +9,36 @@ import { useFetchData } from '../hooks/useFetchData';
 function CustomerTable({ rows }) {
   return (
     <div className="table-wrap customer-table-wrap">
-      <table className="data-table customer-table">
-        <thead>
-          <tr>
-            <th>CODE</th>
-            <th>NAME</th>
-            <th>ADDRESS</th>
-            <th>PLACE</th>
-            <th>CITY</th>
-            <th>PHONE</th>
-            <th>PHONE 2</th>
-            <th>GSTIN</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((customer) => (
-            <tr key={customer.id || customer.code || customer.name}>
-              <td className="customer-table__code">{customer.code || 'N/A'}</td>
-              <td className="customer-table__name">{customer.name || 'N/A'}</td>
-              <td>{customer.address || 'N/A'}</td>
-              <td>{customer.place || 'N/A'}</td>
-              <td>{customer.city || 'N/A'}</td>
-              <td>{customer.phone || '—'}</td>
-              <td>{customer.phone2 || '—'}</td>
-              <td>{customer.gstin || '—'}</td>
+      <div className="customer-table-scroll">
+        <table className="data-table customer-table">
+          <thead>
+            <tr>
+              <th>CODE</th>
+              <th>NAME</th>
+              <th>ADDRESS</th>
+              <th>PLACE</th>
+              <th>CITY</th>
+              <th>PHONE</th>
+              <th>PHONE 2</th>
+              <th>GSTIN</th>
             </tr>
-          ))}
-        </tbody>
-      </table>
+          </thead>
+          <tbody>
+            {rows.map((customer) => (
+              <tr key={customer.id || customer.code || customer.name}>
+                <td className="customer-table__code">{customer.code || 'N/A'}</td>
+                <td className="customer-table__name">{customer.name || 'N/A'}</td>
+                <td>{customer.address || 'N/A'}</td>
+                <td>{customer.place || 'N/A'}</td>
+                <td>{customer.city || 'N/A'}</td>
+                <td>{customer.phone || '—'}</td>
+                <td>{customer.phone2 || '—'}</td>
+                <td>{customer.gstin || '—'}</td>
+              </tr>
+            ))}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
 }

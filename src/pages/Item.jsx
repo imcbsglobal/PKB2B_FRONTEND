@@ -74,73 +74,106 @@ function ToggleButton({ active, icon, label, onClick }) {
 function ItemTable({ rows, onStatusChange }) {
   return (
     <div className="table-wrap item-table-wrap">
-      <table className="data-table item-table">
-        <thead>
-          <tr>
-            <th>IMAGE</th>
-            <th>STATUS</th>
-            <th>CODE</th>
-            <th>ITEM NAME</th>
-            <th>CATEGORY</th>
-            <th>PRODUCT</th>
-            <th>BRAND</th>
-            <th>STOCK</th>
-            <th style={{ textAlign: 'right' }}>MRP</th>
-            <th style={{ textAlign: 'right' }}>PRICE</th>
-            <th>PRICE TYPE</th>
-          </tr>
-        </thead>
-        <tbody>
-          {rows.map((item) => {
-            const tone = getStockTone(item.quantity);
+      <div className="item-table-scroll">
+        <table className="data-table item-table">
+          <thead>
+            <tr>
+              <th style={{ textAlign: 'center' }}>IMAGE</th>
+              <th style={{ textAlign: 'center' }}>STATUS</th>
+              <th>CODE</th>
+              <th>ITEM NAME</th>
+              <th>CATEGORY</th>
+              <th>PRODUCT</th>
+              <th>BRAND</th>
+              <th style={{ textAlign: 'right' }}>STOCK</th>
+              <th style={{ textAlign: 'right' }}>MRP</th>
+              <th style={{ textAlign: 'right' }}>PRICE</th>
+              <th style={{ textAlign: 'right' }}>Retail</th>
+              <th style={{ textAlign: 'right' }}>Dealer PRICE</th>
+              <th style={{ textAlign: 'right' }}>CB price</th>
+              <th style={{ textAlign: 'right' }}>Net rate</th>
+              <th style={{ textAlign: 'right' }}>PK price</th>
+            </tr>
+          </thead>
+          <tbody>
+            {rows.map((item) => {
+              const tone = getStockTone(item.quantity);
 
-            return (
-              <tr key={item.id || item.code || item.name}>
-                <td>
-                  <div className="item-thumb item-thumb--table">
-                    {item.url2 ? <img src={item.url2} alt={item.name || 'Item'} loading="lazy" /> : <span>No Image</span>}
-                  </div>
-                </td>
-                <td>
-                  <select 
-                    value={item.product_status || 'Active'} 
-                    onChange={(e) => onStatusChange(item, e.target.value)}
-                    style={{
-                      padding: '6px 10px',
-                      borderRadius: '4px',
-                      border: '1px solid #ddd',
-                      fontSize: '13px',
-                      fontWeight: '500',
-                      cursor: 'pointer',
-                      backgroundColor: item.product_status === 'Active' ? '#dcfce7' : '#fee2e2',
-                      color: item.product_status === 'Active' ? '#166534' : '#991b1b',
-                    }}
-                  >
-                    <option value="Active">Active</option>
-                    <option value="Inactive">Inactive</option>
-                  </select>
-                </td>
-                <td className="item-table__code">{item.code || 'N/A'}</td>
-                <td className="item-table__name">
-                  <div className="item-name-wrapper">
-                    <div>{item.name || 'N/A'}</div>
-                    {item.barcode && <div className="item-barcode-sub" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Barcode: {item.barcode}</div>}
-                  </div>
-                </td>
-                <td>{item.product || 'N/A'}</td>
-                <td>{item.product || 'N/A'}</td>
-                <td>{item.brand || 'N/A'}</td>
-                <td>{item.quantity ?? 0}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.bmrp || 0).toLocaleString('en-IN')}</td>
-                <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.price || 0).toLocaleString('en-IN')}</td>
-                <td style={{ textAlign: 'center' }}>{item.price_type || 'N/A'}</td>
-              </tr>
-            );
-          })}
-        </tbody>
-      </table>
+              return (
+                <tr key={item.id || item.code || item.name}>
+                  <td style={{ textAlign: 'center' }}>
+                    <div className="item-thumb item-thumb--table">
+                      {item.url2 ? <img src={item.url2} alt={item.name || 'Item'} loading="lazy" /> : <span>No Image</span>}
+                    </div>
+                  </td>
+                  <td style={{ textAlign: 'center' }}>
+                    <select 
+                      value={item.product_status || 'Active'} 
+                      onChange={(e) => onStatusChange(item, e.target.value)}
+                      style={{
+                        padding: '6px 10px',
+                        borderRadius: '4px',
+                        border: '1px solid #ddd',
+                        fontSize: '13px',
+                        fontWeight: '500',
+                        cursor: 'pointer',
+                        backgroundColor: item.product_status === 'Active' ? '#dcfce7' : '#fee2e2',
+                        color: item.product_status === 'Active' ? '#166534' : '#991b1b',
+                      }}
+                    >
+                      <option value="Active">Active</option>
+                      <option value="Inactive">Inactive</option>
+                    </select>
+                  </td>
+                  <td className="item-table__code">{item.code || 'N/A'}</td>
+                  <td className="item-table__name">
+                    <div className="item-name-wrapper">
+                      <div>{item.name || 'N/A'}</div>
+                      {item.barcode && <div className="item-barcode-sub" style={{ fontSize: '12px', color: '#6b7280', marginTop: '4px' }}>Barcode: {item.barcode}</div>}
+                    </div>
+                  </td>
+                  <td>{item.product || 'N/A'}</td>
+                  <td>{item.product || 'N/A'}</td>
+                  <td>{item.brand || 'N/A'}</td>
+                  <td style={{ textAlign: 'right' }}>{item.quantity ?? 0}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.bmrp || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.price || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.salesprice || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.secondprice || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.thirdprice || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.fourthprice || 0).toLocaleString('en-IN')}</td>
+                  <td style={{ textAlign: 'right', whiteSpace: 'nowrap' }}>₹ {Number(item.nlc1 || 0).toLocaleString('en-IN')}</td>
+                </tr>
+              );
+            })}
+          </tbody>
+        </table>
+      </div>
     </div>
   );
+}
+
+/**
+ * Generate page size options dynamically based on total row count
+ * @param {number} total - Total number of rows
+ * @returns {number[]} Array of page size options (e.g., [10, 20, 30, ..., totalCount])
+ * 
+ * Examples:
+ * - Total 57 returns: [10, 20, 30, 40, 50, 57]
+ * - Total 120 returns: [10, 20, 30, 40, 50, 60, 70, 80, 90, 100, 110, 120]
+ */
+function generatePageSizeOptions(total) {
+  if (total <= 0) return [10];
+  
+  const options = [];
+  for (let i = 10; i < total; i += 10) {
+    options.push(i);
+  }
+  
+  // Always add the total count as the final option
+  options.push(total);
+  
+  return options;
 }
 
 export default function Item() {
@@ -153,7 +186,7 @@ export default function Item() {
   const [selectedCategories, setSelectedCategories] = useState([]);
   const [brandOpen, setBrandOpen] = useState(false);
   const [categoryOpen, setCategoryOpen] = useState(false);
-  const [itemsPerPage] = useState(30);
+  const [itemsPerPage, setItemsPerPage] = useState(10);
   const [localItems, setLocalItems] = useState([]);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
 
@@ -348,6 +381,21 @@ export default function Item() {
               )}
             </div>
           </div>
+
+          <select 
+            className="item-rowcount-select" 
+            value={itemsPerPage}
+            onChange={(e) => {
+              setItemsPerPage(parseInt(e.target.value, 10));
+            }}
+            title="Rows per page"
+          >
+            {generatePageSizeOptions(finalItems.length).map((pageSize) => (
+              <option key={pageSize} value={pageSize}>
+                {pageSize}
+              </option>
+            ))}
+          </select>
 
           <div className="item-view-switch" aria-label="View mode">
             <ToggleButton
