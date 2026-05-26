@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import { bannerAPI } from '../Services/api';
+import { bannerAPI, productBatchAPI, resolveMediaUrl } from '../Services/api';
 
 export default function Banneradd({
   onBannerAdded,
@@ -14,18 +14,62 @@ export default function Banneradd({
     title: '',
     caption: '',
     images: [],
+    item_codes: [],
   });
 
   const [imagePreviews, setImagePreviews] = useState([]);
 
   const [loading, setLoading] = useState(false);
+  const [itemsLoading, setItemsLoading] = useState(false);
 
   const [error, setError] = useState('');
+  const [allItems, setAllItems] = useState([]);
+  const [itemSearch, setItemSearch] = useState('');
+  const [showItemsDropdown, setShowItemsDropdown] = useState(false);
+
+  // ================= FETCH ITEMS =================
+  useEffect(() => {
+    const fetchItems = async () => {
+      try {
+        setItemsLoading(true);
+        const response = await productBatchAPI.getAllItems();
+        // Extract items from response
+        const items = response?.data || [];
+        console.log('Raw items response:', items);
+        if (items.length > 0) {
+          console.log('First item structure:', items[0]);
+        }
+        setAllItems(Array.isArray(items) ? items : []);
+      } catch (err) {
+        console.error('Error fetching items:', err);
+        showToast?.('Failed to load items', 'error');
+      } finally {
+        setItemsLoading(false);
+      }
+    };
+
+    fetchItems();
+  }, [showToast]);
 
   // ================= EDIT MODE =================
   useEffect(() => {
 
     if (bannerToEdit) {
+
+      // Normalize item_codes to ensure they're strings
+      let itemCodes = bannerToEdit.item_codes || bannerToEdit.items || [];
+      if (!Array.isArray(itemCodes)) {
+        itemCodes = Object.values(itemCodes || {});
+      }
+      
+      // Ensure all codes are strings and cleaned
+      itemCodes = itemCodes.map(code => {
+        // If it's an object, extract the code field or id
+        if (typeof code === 'object' && code !== null) {
+          code = code.code || code.id || code.item_code || String(code);
+        }
+        return String(code).split(':')[0].trim();
+      });
 
       setFormData({
         title:
@@ -45,8 +89,20 @@ export default function Banneradd({
           bannerToEdit.caption ||
           '',
         images: [],
+        item_codes: itemCodes,
       });
-      setImagePreviews([]);
+
+      // Load banner image preview if editing
+      if (bannerToEdit.image || bannerToEdit.image_url || bannerToEdit.banner_image) {
+        const imageUrl = resolveMediaUrl(
+          bannerToEdit.image || 
+          bannerToEdit.image_url || 
+          bannerToEdit.banner_image
+        );
+        setImagePreviews([imageUrl]);
+      } else {
+        setImagePreviews([]);
+      }
     }
 
   }, [bannerToEdit]);
@@ -120,6 +176,71 @@ export default function Banneradd({
     }
   };
 
+  // ================= ITEM SELECTION =================
+  const extractItemCode = (item) => {
+    // Prioritize 'code' field (simpler codes like "08308")
+    // Fall back to barcode only if code doesn't exist
+    let code = item?.code || item?.barcode || item?.id;
+    
+    // If it's an object, extract string representation
+    if (typeof code === 'object') {
+      code = String(Object.values(code)[0] || code);
+    }
+    
+    // Convert to string and trim
+    code = String(code || '').trim();
+    
+    // Remove any trailing info like " : 1"
+    code = code.split(':')[0].trim();
+    
+    console.log('Extracted item code from:', item, '-> Code:', code);
+    
+    return code;
+  };
+
+  const handleItemToggle = (item) => {
+    const itemCode = extractItemCode(item);
+    if (!itemCode) {
+      console.warn('Invalid item code extracted:', item);
+      return;
+    }
+    
+    console.log('Toggling item:', itemCode, 'Current codes:', formData.item_codes);
+    
+    setFormData((prev) => ({
+      ...prev,
+      item_codes: prev.item_codes.includes(itemCode)
+        ? prev.item_codes.filter((code) => code !== itemCode)
+        : [...prev.item_codes, itemCode],
+    }));
+  };
+
+  const filteredItems = allItems.filter((item) => {
+    const searchLower = itemSearch.toLowerCase();
+    const itemName = (item.name || item.title || '').toLowerCase();
+    const itemCode = extractItemCode(item).toLowerCase();
+    const itemBrand = (item.brand || '').toLowerCase();
+    // Search across name, code, brand, and product
+    return itemName.includes(searchLower) || 
+           itemCode.includes(searchLower) || 
+           itemBrand.includes(searchLower) ||
+           (item.product || '').toLowerCase().includes(searchLower);
+  });
+
+  const selectedItemsList = allItems.filter((item) => {
+    const itemCode = extractItemCode(item);
+    return formData.item_codes.includes(itemCode);
+  }).concat(
+    // Also include items that are in item_codes but not in allItems (for display purposes)
+    formData.item_codes
+      .filter(code => !allItems.some(item => extractItemCode(item) === code))
+      .map(code => ({
+        code,
+        name: code,
+        id: code,
+      }))
+  );
+
   // ================= SUBMIT =================
   const handleSubmit = async (e) => {
 
@@ -156,6 +277,20 @@ export default function Banneradd({
       data.append('title', formData.title.trim());
       data.append('body', formData.caption.trim());
 
+      // Append item codes if selected - send each code separately
+      if (formData.item_codes.length > 0) {
+        // Clean each item code
+        const cleanedCodes = formData.item_codes.map(code => {
+          const cleaned = String(code).split(':')[0].trim();
+          return cleaned;
+        });
+        console.log('Final item codes being sent (one by one):', cleanedCodes);
+        // Append each code separately to FormData
+        cleanedCodes.forEach(code => {
+          data.append('item_codes', code);
+        });
+      }
+
       // Append image file if provided
       if (formData.images.length > 0) {
         data.append('image', formData.images[0]);
@@ -163,10 +298,12 @@ export default function Banneradd({
 
       // Call the banner API to save
       if (bannerToEdit) {
-        data.append('id', bannerToEdit.id);
+        // Use edit endpoint for updates
+        await bannerAPI.editBanner(bannerToEdit.id, data);
+      } else {
+        // Use upload endpoint for new banners
+        await bannerAPI.uploadBanner(data);
       }
-
-      await bannerAPI.uploadBanner(data);
 
       showToast?.(
         bannerToEdit ? 'Offer Zone updated successfully!' : 'Offer Zone added successfully!',
@@ -227,6 +364,250 @@ export default function Banneradd({
 
           )}
 
+          {/* ================= 1. ITEMS SELECTION ================= */}
+          <div style={{
+            marginTop: '0px',
+            marginBottom: '16px',
+          }}>
+            <label className="field__label">
+              Select Items for Offer
+            </label>
+
+            <div style={{
+              position: 'relative',
+              marginTop: '8px',
+            }}>
+              <input
+                type="text"
+                placeholder="Search items by name or code..."
+                value={itemSearch}
+                onChange={(e) => setItemSearch(e.target.value)}
+                onFocus={() => setShowItemsDropdown(true)}
+                style={{
+                  width: '100%',
+                  padding: '10px 12px',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  fontSize: '14px',
+                  fontFamily: 'inherit',
+                }}
+              />
+
+              {showItemsDropdown && (
+                <div style={{
+                  position: 'absolute',
+                  top: '100%',
+                  left: 0,
+                  right: 0,
+                  marginTop: '4px',
+                  backgroundColor: '#fff',
+                  border: '1px solid #e5e7eb',
+                  borderRadius: '6px',
+                  maxHeight: '250px',
+                  overflowY: 'auto',
+                  zIndex: 100,
+                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
+                }}>
+                  {itemsLoading ? (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280' }}>
+                      Loading items...
+                    </div>
+                  ) : filteredItems.length > 0 ? (
+                    filteredItems.map((item) => {
+                      const itemCode = extractItemCode(item);
+                      const isSelected = formData.item_codes.includes(itemCode);
+                      const itemName = item.name || item.title || 'N/A';
+                      const itemPrice = item.fourthprice || item.salesprice || item.price || 0;
+                      const itemImage = item.url2 || item.image || '';
+                      const itemBrand = item.brand || '';
+
+                      return (
+                        <label
+                          key={itemCode}
+                          style={{
+                            display: 'flex',
+                            alignItems: 'center',
+                            padding: '12px',
+                            cursor: 'pointer',
+                            backgroundColor: isSelected ? '#f3f4f6' : '#fff',
+                            borderBottom: '1px solid #f3f4f6',
+                            transition: 'background-color 0.2s',
+                            gap: '12px',
+                          }}
+                          onMouseEnter={(e) => {
+                            if (!isSelected) e.currentTarget.style.backgroundColor = '#f9fafb';
+                          }}
+                          onMouseLeave={(e) => {
+                            e.currentTarget.style.backgroundColor = isSelected ? '#f3f4f6' : '#fff';
+                          }}
+                        >
+                          <input
+                            type="checkbox"
+                            checked={isSelected}
+                            onChange={() => handleItemToggle(item)}
+                            style={{
+                              minWidth: '16px',
+                              width: '16px',
+                              height: '16px',
+                              cursor: 'pointer',
+                            }}
+                          />
+                          
+                          {/* Item Image */}
+                          {itemImage && (
+                            <img
+                              src={itemImage}
+                              alt={itemName}
+                              style={{
+                                width: '48px',
+                                height: '48px',
+                                objectFit: 'cover',
+                                borderRadius: '4px',
+                                backgroundColor: '#f3f4f6',
+                              }}
+                            />
+                          )}
+                          
+                          {/* Item Details */}
+                          <div style={{ flex: 1 }}>
+                            <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
+                              {itemName}
+                            </div>
+                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
+                              Code: {itemCode} {itemBrand && `• ${itemBrand}`}
+                            </div>
+                            <div style={{ fontSize: '12px', color: '#059669', fontWeight: '500', marginTop: '2px' }}>
+                              ₹ {Number(itemPrice || 0).toFixed(2)}
+                            </div>
+                          </div>
+                        </label>
+                      );
+                    })
+                  ) : (
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af' }}>
+                      No items found
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+
+            {/* Display selected items */}
+            {selectedItemsList.length > 0 && (
+              <div style={{
+                marginTop: '16px',
+                padding: '12px',
+                backgroundColor: '#f9fafb',
+                borderRadius: '8px',
+                border: '1px solid #e5e7eb',
+              }}>
+                <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
+                  Selected Items ({selectedItemsList.length})
+                </div>
+                <div style={{
+                  display: 'grid',
+                  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                  gap: '12px',
+                }}>
+                  {selectedItemsList.map((item) => {
+                    const itemCode = extractItemCode(item);
+                    // Use proper item name, with fallback to code
+                    const itemName = item.name || item.title || itemCode || 'Item';
+                    const itemPrice = item.fourthprice || item.salesprice || item.price || 0;
+                    const itemImage = item.url2 || item.image || '';
+
+                    return (
+                      <div
+                        key={itemCode}
+                        style={{
+                          position: 'relative',
+                          backgroundColor: '#fff',
+                          borderRadius: '8px',
+                          border: '2px solid #4f46e5',
+                          overflow: 'hidden',
+                          transition: 'all 0.2s',
+                        }}
+                        onMouseEnter={(e) => {
+                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 70, 229, 0.2)';
+                        }}
+                        onMouseLeave={(e) => {
+                          e.currentTarget.style.boxShadow = 'none';
+                        }}
+                      >
+                        {/* Image */}
+                        {itemImage && (
+                          <img
+                            src={itemImage}
+                            alt={itemName}
+                            style={{
+                              width: '100%',
+                              height: '100px',
+                              objectFit: 'cover',
+                              backgroundColor: '#f3f4f6',
+                            }}
+                          />
+                        )}
+                        
+                        {/* Content */}
+                        <div style={{ padding: '8px' }}>
+                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#1f2937', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
+                            {itemName}
+                          </div>
+                          <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '4px' }}>
+                            {itemCode}
+                          </div>
+                          <div style={{ fontSize: '12px', color: '#059669', fontWeight: '600', marginBottom: '8px' }}>
+                            ₹ {Number(itemPrice || 0).toFixed(2)}
+                          </div>
+                          <button
+                            type="button"
+                            onClick={() => handleItemToggle(item)}
+                            style={{
+                              width: '100%',
+                              padding: '4px 8px',
+                              backgroundColor: '#fee2e2',
+                              color: '#dc2626',
+                              border: 'none',
+                              borderRadius: '4px',
+                              fontSize: '11px',
+                              fontWeight: '500',
+                              cursor: 'pointer',
+                              transition: 'all 0.2s',
+                            }}
+                            onMouseEnter={(e) => {
+                              e.currentTarget.style.backgroundColor = '#fca5a5';
+                            }}
+                            onMouseLeave={(e) => {
+                              e.currentTarget.style.backgroundColor = '#fee2e2';
+                            }}
+                          >
+                            Remove
+                          </button>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </div>
+            )}
+          </div>
+
+          {/* Close dropdown when clicking outside */}
+          {showItemsDropdown && (
+            <div
+              style={{
+                position: 'fixed',
+                top: 0,
+                left: 0,
+                right: 0,
+                bottom: 0,
+                zIndex: 99,
+              }}
+              onClick={() => setShowItemsDropdown(false)}
+            />
+          )}
+
+          {/* ================= 2. OFFER TITLE ================= */}
           <Input
             label="Offer Title"
             name="title"
@@ -235,6 +616,7 @@ export default function Banneradd({
             placeholder="Enter offer title"
           />
 
+          {/* ================= 3. CAPTION ================= */}
           <Input
             label="Caption"
             name="caption"
@@ -243,6 +625,7 @@ export default function Banneradd({
             placeholder="Enter caption"
           />
 
+          {/* ================= 4. IMAGE UPLOAD ================= */}
           <div style={{
             marginTop: '16px',
             marginBottom: '16px',
@@ -343,6 +726,8 @@ export default function Banneradd({
             </div>
 
           )}
+
+          {/* ================= 5. SUBMIT BUTTON ================= */}
 
           <div style={{
             display: 'flex',

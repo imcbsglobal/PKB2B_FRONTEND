@@ -120,7 +120,7 @@ export default function Login({ onLogin }) {
             all in one focused workspace.
           </p>
 
-          {/* Features */}
+          {/* Features */} 
           <ul className="login-features" aria-label="Key features">
             {[
               'Real-time order notifications',
@@ -217,7 +217,7 @@ export default function Login({ onLogin }) {
                     alignItems: 'center',
                     lineHeight: 1,
                   }}
-                >
+                >j
                   {showPass ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>

@@ -321,10 +321,18 @@ export const bannerAPI = {
   getBanners: () =>
     apiClient.get('/banners/'),
 
-  // UPLOAD BANNER (Create or Update)
+  // UPLOAD BANNER (Create)
   uploadBanner: (formData) =>
     request('/banners/upload/', {
       method: 'POST',
+      data: formData,
+      isFormData: true,
+    }),
+
+  // EDIT BANNER (Update)
+  editBanner: (id, formData) =>
+    request(`/banners/${id}/edit/`, {
+      method: 'PUT',
       data: formData,
       isFormData: true,
     }),

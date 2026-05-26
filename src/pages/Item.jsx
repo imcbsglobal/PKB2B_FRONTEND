@@ -71,6 +71,8 @@ function ToggleButton({ active, icon, label, onClick }) {
   );
 }
 
+
+
 function ItemTable({ rows, onStatusChange }) {
   return (
     <div className="table-wrap item-table-wrap">
@@ -222,6 +224,8 @@ export default function Item() {
       alert('Failed to update product status. Please try again.');
     }
   }, []);
+
+
 
   const counts = useMemo(() => {
     return localItems.reduce(
@@ -444,7 +448,9 @@ export default function Item() {
           <>
             <div className="item-grid">
               {paginatedItems.map((item) => (
-                <ItemCard key={item.id || item.code || item.name} item={item} />
+                <div key={item.id || item.code || item.name}>
+                  <ItemCard item={item} />
+                </div>
               ))}
             </div>
             {pagination.totalPages > 1 && (
@@ -467,6 +473,8 @@ export default function Item() {
           )}
         </>
       )}
+
+
     </div>
   );
 }

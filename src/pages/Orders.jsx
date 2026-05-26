@@ -32,8 +32,19 @@ function formatTimeTo12Hour(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
 
-  let hours = d.getHours();
-  const minutes = String(d.getMinutes()).padStart(2, '0');
+  // Convert UTC to IST (UTC+5:30)
+  const utcHours = d.getUTCHours();
+  const utcMinutes = d.getUTCMinutes();
+  
+  let istHours = (utcHours + 5) % 24;
+  let istMinutes = utcMinutes + 30;
+  if (istMinutes >= 60) {
+    istMinutes -= 60;
+    istHours = (istHours + 1) % 24;
+  }
+
+  let hours = istHours;
+  const minutes = String(istMinutes).padStart(2, '0');
   const amPm = hours >= 12 ? 'pm' : 'am';
   hours = hours % 12;
   if (hours === 0) hours = 12;
@@ -572,7 +583,7 @@ export default function Orders({ showToast }) {
                   <tr>
                     <th>ITEM CODE</th>
                     <th>ITEM NAME</th>
-                    <th>QTY</th>
+              v        <th>QTY</th>
                     <th>RATE</th>
                   </tr>
                 </thead>
