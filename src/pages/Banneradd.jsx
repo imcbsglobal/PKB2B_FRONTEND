@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import Button from '../components/Button';
 import Input from '../components/Input';
+import Spinner from '../components/Spinner';
 import { bannerAPI, productBatchAPI, resolveMediaUrl } from '../Services/api';
 
 export default function Banneradd({
@@ -24,32 +25,73 @@ export default function Banneradd({
 
   const [error, setError] = useState('');
   const [allItems, setAllItems] = useState([]);
+  const [searchResults, setSearchResults] = useState([]);
   const [itemSearch, setItemSearch] = useState('');
   const [showItemsDropdown, setShowItemsDropdown] = useState(false);
 
-  // ================= FETCH ITEMS =================
+  // ================= ITEM SEARCH =================
   useEffect(() => {
-    const fetchItems = async () => {
+    const searchTerm = itemSearch.trim();
+
+    if (searchTerm.length < 2) {
+      setSearchResults([]);
+      setItemsLoading(false);
+      return;
+    }
+
+    const abortController = new AbortController();
+
+    const timer = setTimeout(async () => {
       try {
         setItemsLoading(true);
-        const response = await productBatchAPI.getAllItems();
-        // Extract items from response
-        const items = response?.data || [];
-        console.log('Raw items response:', items);
-        if (items.length > 0) {
-          console.log('First item structure:', items[0]);
-        }
-        setAllItems(Array.isArray(items) ? items : []);
+        const response = await productBatchAPI.searchItems(
+          searchTerm,
+          abortController.signal
+        );
+        const payload = response?.data;
+        const apiItems = Array.isArray(payload)
+          ? payload
+          : Array.isArray(payload?.results)
+            ? payload.results
+            : [];
+
+        // Keep only code/barcode matches for accurate barcode search.
+        const normalizedSearch = searchTerm.toLowerCase();
+        const matchedItems = apiItems.filter((item) => {
+          const code = String(item?.code || '').toLowerCase();
+          const barcode = String(item?.barcode || '').toLowerCase();
+          return code.includes(normalizedSearch) || barcode.includes(normalizedSearch);
+        });
+
+        setSearchResults(matchedItems.slice(0, 20));
+
+        // Cache returned items for selected-cards rendering.
+        setAllItems((prev) => {
+          const map = new Map(
+            prev.map((item) => [extractItemCode(item), item])
+          );
+          matchedItems.forEach((item) => {
+            map.set(extractItemCode(item), item);
+          });
+          return Array.from(map.values());
+        });
       } catch (err) {
-        console.error('Error fetching items:', err);
-        showToast?.('Failed to load items', 'error');
+        if (err.name === 'AbortError') {
+          return;
+        }
+        console.error('Error searching items:', err);
+        setSearchResults([]);
+        showToast?.('Failed to search items', 'error');
       } finally {
         setItemsLoading(false);
       }
-    };
+    }, 150);
 
-    fetchItems();
-  }, [showToast]);
+    return () => {
+      clearTimeout(timer);
+      abortController.abort();
+    };
+  }, [itemSearch, showToast]);
 
   // ================= EDIT MODE =================
   useEffect(() => {
@@ -193,8 +235,6 @@ export default function Banneradd({
     // Remove any trailing info like " : 1"
     code = code.split(':')[0].trim();
     
-    console.log('Extracted item code from:', item, '-> Code:', code);
-    
     return code;
   };
 
@@ -205,8 +245,6 @@ export default function Banneradd({
       return;
     }
     
-    console.log('Toggling item:', itemCode, 'Current codes:', formData.item_codes);
-    
     setFormData((prev) => ({
       ...prev,
       item_codes: prev.item_codes.includes(itemCode)
@@ -215,17 +253,9 @@ export default function Banneradd({
     }));
   };
 
-  const filteredItems = allItems.filter((item) => {
-    const searchLower = itemSearch.toLowerCase();
-    const itemName = (item.name || item.title || '').toLowerCase();
-    const itemCode = extractItemCode(item).toLowerCase();
-    const itemBrand = (item.brand || '').toLowerCase();
-    // Search across name, code, brand, and product
-    return itemName.includes(searchLower) || 
-           itemCode.includes(searchLower) || 
-           itemBrand.includes(searchLower) ||
-           (item.product || '').toLowerCase().includes(searchLower);
-  });
+  const searchTerm = itemSearch.trim();
+
+  const filteredItems = searchResults;
 
   const selectedItemsList = allItems.filter((item) => {
     const itemCode = extractItemCode(item);
@@ -379,10 +409,16 @@ export default function Banneradd({
             }}>
               <input
                 type="text"
-                placeholder="Search items by name or code..."
+                placeholder="Type barcode or item code to search..."
                 value={itemSearch}
-                onChange={(e) => setItemSearch(e.target.value)}
-                onFocus={() => setShowItemsDropdown(true)}
+                onChange={(e) => {
+                  const value = e.target.value;
+                  setItemSearch(value);
+                  setShowItemsDropdown(value.trim().length >= 2);
+                }}
+                onFocus={() => {
+                  setShowItemsDropdown(searchTerm.length >= 2);
+                }}
                 style={{
                   width: '100%',
                   padding: '10px 12px',
@@ -393,7 +429,7 @@ export default function Banneradd({
                 }}
               />
 
-              {showItemsDropdown && (
+              {showItemsDropdown && searchTerm.length >= 2 && (
                 <div style={{
                   position: 'absolute',
                   top: '100%',
@@ -409,8 +445,25 @@ export default function Banneradd({
                   boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
                 }}>
                   {itemsLoading ? (
-                    <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280' }}>
-                      Loading items...
+                    <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
+                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
+                        <Spinner size="md" color="#f59e0b" />
+                        <div style={{ color: '#6b7280' }}>Searching items…</div>
+                      </div>
+
+                      <div style={{ width: '100%', marginTop: '8px', display: 'grid', gap: '8px' }}>
+                        {[1,2,3].map((i) => (
+                          <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '8px 12px' }}>
+                            <div style={{ width: '16px', height: '16px', background: '#e5e7eb', borderRadius: '2px', animation: 'pulse 1.6s infinite' }} />
+                            <div style={{ flex: 1 }}>
+                              <div style={{ height: '12px', width: '60%', background: '#e5e7eb', borderRadius: '4px', marginBottom: '6px', animation: 'pulse 1.6s infinite' }} />
+                              <div style={{ height: '10px', width: '40%', background: '#f3f4f6', borderRadius: '4px', animation: 'pulse 1.6s infinite' }} />
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+
+                      <style>{`@keyframes pulse { 0%,100%{opacity:0.6}50%{opacity:1} }`}</style>
                     </div>
                   ) : filteredItems.length > 0 ? (
                     filteredItems.map((item) => {
@@ -485,7 +538,7 @@ export default function Banneradd({
                     })
                   ) : (
                     <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af' }}>
-                      No items found
+                      No matching items found for this code
                     </div>
                   )}
                 </div>

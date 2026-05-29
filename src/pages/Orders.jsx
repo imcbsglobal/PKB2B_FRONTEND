@@ -3,6 +3,7 @@ import React, { useMemo, useState } from 'react';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
 import Pagination from '../components/Pagination';
+import Badge from '../components/Badge';
 
 import { orderAPI } from '../Services/api';
 import { useFetchData } from '../hooks/useFetchData';
@@ -66,6 +67,113 @@ function getTodayDate() {
   return today.toISOString().split('T')[0];
 }
 
+function normalizeOrderSource(value) {
+  return String(value || '').toLowerCase().trim();
+}
+
+function getOrderSourceMeta(order) {
+  const productOfferStatuses = Array.isArray(order?.products)
+    ? order.products
+        .map((item) => normalizeOrderSource(item?.offer_status))
+        .filter(Boolean)
+    : [];
+
+  const hasOfferItem = productOfferStatuses.some((status) =>
+    status === 'yes' ||
+    status === 'offer' ||
+    status === 'with offer' ||
+    status === 'offer item'
+  );
+
+  const hasWithoutOfferItem = productOfferStatuses.length > 0 && productOfferStatuses.every((status) =>
+    status === 'no' ||
+    status === 'without offer' ||
+    status === 'without-offer'
+  );
+
+  if (hasOfferItem) {
+    return {
+      label: 'Offer',
+      variant: 'primary',
+      title: 'At least one product in this order is marked as offer',
+    };
+  }
+
+  if (hasWithoutOfferItem) {
+    return {
+      label: 'Without Offer',
+      variant: 'default',
+      title: 'All products in this order are marked without offer',
+    };
+  }
+
+  const explicitSource = normalizeOrderSource(
+    order?.source || order?.order_source || order?.source_type || order?.order_type || order?.type
+  );
+
+  const hasOfferMarkers =
+    Boolean(order?.offer_id || order?.offer_name || order?.banner_id || order?.banner_name) ||
+    Boolean(order?.discount || order?.discount_amount || order?.offer_applied || order?.is_offer);
+
+  const hasOfferItemMarkers = Array.isArray(order?.products)
+    ? order.products.some((item) => {
+        const itemSource = normalizeOrderSource(item?.source || item?.item_source || item?.type);
+        return (
+          itemSource.includes('offer') ||
+          itemSource.includes('promo') ||
+          itemSource.includes('banner') ||
+          itemSource.includes('discount') ||
+          Boolean(item?.offer_id || item?.offer_name || item?.offer_applied || item?.is_offer) ||
+          Boolean(item?.discount || item?.discount_amount)
+        );
+      })
+    : false;
+
+  if (explicitSource.includes('offer') || explicitSource.includes('promo') || explicitSource.includes('banner')) {
+    return {
+      label: 'Offer',
+      variant: 'primary',
+      title: 'Order marked as offer-based by the API',
+    };
+  }
+
+  if (
+    explicitSource.includes('regular') ||
+    explicitSource.includes('direct') ||
+    explicitSource.includes('normal') ||
+    explicitSource.includes('without offer') ||
+    explicitSource.includes('without-offer')
+  ) {
+    return {
+      label: 'Without Offer',
+      variant: 'default',
+      title: 'Order marked as a non-offer order by the API',
+    };
+  }
+
+  if (hasOfferMarkers || hasOfferItemMarkers) {
+    return {
+      label: 'Offer',
+      variant: 'primary',
+      title: 'Offer-related data detected in this order',
+    };
+  }
+
+  if (explicitSource) {
+    return {
+      label: explicitSource,
+      variant: 'info',
+      title: `Order source: ${explicitSource}`,
+    };
+  }
+
+  return {
+    label: 'Unknown',
+    variant: 'warning',
+    title: 'No offer/source metadata returned by the API',
+  };
+}
+
 /**
  * Generate page size options dynamically based on total row count
  * @param {number} total - Total number of rows
@@ -91,6 +199,7 @@ function generatePageSizeOptions(total) {
 
 export default function Orders({ showToast }) {
   const [filter, setFilter] = useState('All');
+  const [sourceFilter, setSourceFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -99,6 +208,7 @@ export default function Orders({ showToast }) {
   const [dateTo, setDateTo] = useState(getTodayDate());
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [sourceDropdownOpen, setSourceDropdownOpen] = useState(false);
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
@@ -122,7 +232,7 @@ export default function Orders({ showToast }) {
   const refreshOrders = () => {
     dataCache.clear('orders');
     setRefreshKey((value) => value + 1);
-  };
+  };  
 
   const exportToExcel = () => {
     if (filtered.length === 0) {
@@ -138,6 +248,7 @@ export default function Orders({ showToast }) {
       'Phone': order.phone_number || '—',
       'Date': order.created_at ? formatDateToDDMMYYYY(order.created_at) : '—',
       'Time': order.created_at ? formatTimeTo12Hour(order.created_at) : '—',
+      'Order Source': getOrderSourceMeta(order).label,
       'Status': order.status || '—',
     }));
 
@@ -258,6 +369,8 @@ export default function Orders({ showToast }) {
     const term = search.trim().toLowerCase();
 
     return orders.filter((order) => {
+      const sourceMeta = getOrderSourceMeta(order);
+      const orderSource = (sourceMeta.label || '').toLowerCase().trim();
       const status = (order.status || '').toLowerCase().trim();
       const matchesFilter =
         filter === 'All' ||
@@ -265,6 +378,11 @@ export default function Orders({ showToast }) {
         (filter === 'Accepted' && status === 'accepted') ||
         (filter === 'Invoiced' && status === 'invoiced') ||
         (filter === 'Dispatched' && status === 'dispatched');
+
+      const matchesSource =
+        sourceFilter === 'All' ||
+        (sourceFilter === 'Offer' && orderSource === 'offer') ||
+        (sourceFilter === 'Without Offer' && orderSource === 'without offer');
 
       // Date filtering
       let matchesDate = true;
@@ -300,9 +418,9 @@ export default function Orders({ showToast }) {
         return false;
       })();
 
-      return matchesFilter && matchesSearch && matchesDate;
+      return matchesFilter && matchesSource && matchesSearch && matchesDate;
     });
-  }, [orders, search, filter, dateFrom, dateTo]);
+  }, [orders, search, filter, sourceFilter, dateFrom, dateTo]);
 
   const {
     currentPage,
@@ -328,6 +446,7 @@ export default function Orders({ showToast }) {
           barcode: sel.barcode,
           quantity: sel.quantity,
           rate: sel.rate,
+          offer_status: sel.offer_status,
         },
       ];
     }
@@ -396,6 +515,37 @@ export default function Orders({ showToast }) {
                     </button>
                   );
                 })}
+              </div>
+            )}
+          </div>
+
+          <div className="order-filter-dropdown">
+            <button 
+              type="button" 
+              className="order-filter-dropdown__button"
+              onClick={() => setSourceDropdownOpen(!sourceDropdownOpen)}
+              aria-expanded={sourceDropdownOpen}
+            >
+              Source: {sourceFilter}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {sourceDropdownOpen && (
+              <div className="order-filter-dropdown__menu">
+                {['All', 'Offer', 'Without Offer'].map((item) => (
+                  <button
+                    key={item}
+                    type="button"
+                    className={`order-filter-dropdown__item ${sourceFilter === item ? 'order-filter-dropdown__item--active' : ''}`}
+                    onClick={() => {
+                      setSourceFilter(item);
+                      setSourceDropdownOpen(false);
+                    }}
+                  >
+                    <span>{item}</span>
+                  </button>
+                ))}
               </div>
             )}
           </div>
@@ -486,11 +636,13 @@ export default function Orders({ showToast }) {
                     <th>CUSTOMER</th>
                     <th>NUMBER</th>
                     <th>ITEM</th>
+                    <th>SOURCE</th>
                     <th>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentItems.map((row) => {
+                    const sourceMeta = getOrderSourceMeta(row);
                     const status = (row.status || '').toLowerCase().trim();
                     const actionValue =
                       status === 'accepted' ? 'accepted' :
@@ -531,6 +683,11 @@ export default function Orders({ showToast }) {
                             <i className="fa-solid fa-eye" aria-hidden="true" style={{ marginRight: 8 }}></i>
                             View Items
                           </button>
+                        </td>
+                        <td title={sourceMeta.title}>
+                          <Badge variant={sourceMeta.variant} size="sm">
+                            {sourceMeta.label}
+                          </Badge>
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
@@ -583,7 +740,8 @@ export default function Orders({ showToast }) {
                   <tr>
                     <th>ITEM CODE</th>
                     <th>ITEM NAME</th>
-              v        <th>QTY</th>
+                    <th>OFFER</th>
+                    <th>QTY</th>
                     <th>RATE</th>
                   </tr>
                 </thead>
@@ -592,6 +750,14 @@ export default function Orders({ showToast }) {
                     <tr key={idx}>
                       <td>{item.item_code || '—'}</td>
                       <td><OrderCell title={item.item_name || '—'} sub={item.barcode || '—'} /></td>
+                      <td>
+                        <Badge
+                          variant={(normalizeOrderSource(item.offer_status) === 'yes' || normalizeOrderSource(item.offer_status) === 'offer') ? 'primary' : 'default'}
+                          size="sm"
+                        >
+                          {item.offer_status || 'Without Offer'}
+                        </Badge>
+                      </td>
                       <td>{item.quantity ?? 0}</td>
                       <td>₹ {Number(item.rate || 0).toLocaleString('en-IN')}</td>
                     </tr>
@@ -878,10 +1044,15 @@ export default function Orders({ showToast }) {
           white-space: nowrap;
         }
 
+        .orders-table__id {
+          overflow: visible;
+          text-overflow: clip;
+        }
+
         /* Column width distribution */
         .orders-table th:nth-child(1),
         .orders-table td:nth-child(1) {
-          width: 10%;
+          width: 14%;
         }
 
         .orders-table th:nth-child(2),
@@ -897,11 +1068,16 @@ export default function Orders({ showToast }) {
         .orders-table td:nth-child(5),
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 12%;
+          width: 14%;
         }
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
+          width: 12%;
+        }
+
+        .orders-table th:nth-child(8),
+        .orders-table td:nth-child(8) {
           width: 14%;
         }
 
@@ -1091,7 +1267,7 @@ export default function Orders({ showToast }) {
           background: var(--color-card);
           border-radius: var(--radius-lg);
           width: 90%;
-          max-width: 800px;
+          max-width: 960px;
           max-height: 80vh;
           display: flex;
           flex-direction: column;
@@ -1130,13 +1306,14 @@ export default function Orders({ showToast }) {
 
         .orders-modal-body {
           padding: var(--space-5);
-          overflow-y: auto;
+          overflow: auto;
           max-height: calc(80vh - 80px);
         }
 
         .orders-modal-table {
           width: 100%;
           border-collapse: collapse;
+          table-layout: fixed;
         }
 
         .orders-modal-table th {
@@ -1148,6 +1325,43 @@ export default function Orders({ showToast }) {
           letter-spacing: 0.05em;
           text-transform: uppercase;
           border-bottom: 1px solid var(--color-border);
+        }
+
+        .orders-modal-table th:nth-child(1),
+        .orders-modal-table td:nth-child(1) {
+          width: 14%;
+        }
+
+        .orders-modal-table th:nth-child(2),
+        .orders-modal-table td:nth-child(2) {
+          width: 42%;
+        }
+
+        .orders-modal-table th:nth-child(3),
+        .orders-modal-table td:nth-child(3) {
+          width: 14%;
+          text-align: center;
+        }
+
+        .orders-modal-table th:nth-child(4),
+        .orders-modal-table td:nth-child(4) {
+          width: 10%;
+          text-align: center;
+        }
+
+        .orders-modal-table th:nth-child(5),
+        .orders-modal-table td:nth-child(5) {
+          width: 20%;
+          text-align: right;
+          white-space: nowrap;
+        }
+
+        .orders-modal-table td:nth-child(2) {
+          word-break: break-word;
+        }
+
+        .orders-modal-table .orders-cell {
+          min-width: 0;
         }
 
         .orders-modal-table td {

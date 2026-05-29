@@ -786,7 +786,7 @@ export default function Banner({ onNavigate, refreshTrigger }) {
                       No items added to this offer
                     </p>
                   </div>
-                );
+                  );
               }
             })()}
 

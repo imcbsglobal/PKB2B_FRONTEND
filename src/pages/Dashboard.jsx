@@ -309,7 +309,7 @@ export default function Dashboard() {
                           {item.quantity || 0}
                         </td>
                         <td>
-                          <span style={{ color: statusColor, fontWeight: '600', fontSize: '12px' }}>
+                          <span style={{  color: statusColor, fontWeight: '600', fontSize: '12px' }}>
                             {statusText}
                           </span>
                         </td>

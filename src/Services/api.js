@@ -100,6 +100,7 @@ const request = async (
     headers = {},
     isFormData = false,
     includeAuthHeaders = true,
+    signal,
   } = {}
 ) => {
   const requestHeaders = {
@@ -126,6 +127,7 @@ const request = async (
       buildUrl(path),
       {
         method,
+        signal,
         headers: requestHeaders,
         body:
           data === undefined
@@ -239,6 +241,22 @@ export const productBatchAPI = {
     apiClient.get(
       '/productbatchphoto/'
     ),
+
+  searchItems: (query, signal) => {
+    const term = String(query || '').trim();
+
+    if (!term) {
+      return Promise.resolve({ data: [] });
+    }
+
+    const encoded = encodeURIComponent(term);
+
+    // Try common backend filters used in DRF/list endpoints.
+    return apiClient.get(
+      `/productbatchphoto/?search=${encoded}&barcode=${encoded}&code=${encoded}&limit=20`,
+      { signal }
+    );
+  },
 
   updateProductStatus: (barcode, status) =>
     apiClient.post(
