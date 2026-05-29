@@ -12,6 +12,8 @@ import { dataCache } from '../utils/cache';
 
 const FILTERS = [
   { id: 'All', label: 'All' },
+  { id: 'Offer', label: 'Offer' },
+  { id: 'Without Offer', label: 'Without Offer' },
   { id: 'Pending', label: 'Pending' },
   { id: 'Accepted', label: 'Accepted' },
   { id: 'Invoiced', label: 'Invoiced' },
@@ -71,42 +73,119 @@ function normalizeOrderSource(value) {
   return String(value || '').toLowerCase().trim();
 }
 
-function getOrderSourceMeta(order) {
-  const productOfferStatuses = Array.isArray(order?.products)
-    ? order.products
-        .map((item) => normalizeOrderSource(item?.offer_status))
-        .filter(Boolean)
-    : [];
+function normalizeOfferStatus(value) {
+  const normalized = String(value || '').toLowerCase().trim();
 
-  const hasOfferItem = productOfferStatuses.some((status) =>
-    status === 'yes' ||
-    status === 'offer' ||
-    status === 'with offer' ||
-    status === 'offer item'
-  );
+  if (['yes', 'true', '1', 'offer', 'offered'].includes(normalized)) {
+    return true;
+  }
 
-  const hasWithoutOfferItem = productOfferStatuses.length > 0 && productOfferStatuses.every((status) =>
-    status === 'no' ||
-    status === 'without offer' ||
-    status === 'without-offer'
-  );
+  if (['no', 'false', '0', 'without offer', 'without-offer', 'non-offer'].includes(normalized)) {
+    return false;
+  }
 
-  if (hasOfferItem) {
+  return null;
+}
+
+function getOfferBucketMeta(bucket) {
+  if (bucket === 'offer') {
     return {
       label: 'Offer',
       variant: 'primary',
-      title: 'At least one product in this order is marked as offer',
     };
   }
 
-  if (hasWithoutOfferItem) {
+  if (bucket === 'without-offer') {
     return {
       label: 'Without Offer',
       variant: 'default',
-      title: 'All products in this order are marked without offer',
     };
   }
 
+  return {
+    label: 'Unknown',
+    variant: 'warning',
+  };
+}
+
+function splitOrderForDisplay(order) {
+  const products = Array.isArray(order?.products) ? order.products : [];
+
+  if (products.length === 0) {
+    return [
+      {
+        ...order,
+        row_key: `${order?.order_id || 'order'}::single`,
+        row_items: [],
+        row_offer_bucket: null,
+        row_offer_label: null,
+        row_offer_variant: null,
+      },
+    ];
+  }
+
+  const groupedItems = products.reduce((acc, item) => {
+    const isOffer = normalizeOfferStatus(item?.offer_status ?? item?.is_offer ?? item?.offer_applied);
+    const bucket = isOffer === true ? 'offer' : isOffer === false ? 'without-offer' : 'unknown';
+
+    if (!acc[bucket]) {
+      acc[bucket] = [];
+    }
+
+    acc[bucket].push(item);
+    return acc;
+  }, {});
+
+  const offerItems = Array.isArray(groupedItems.offer) ? groupedItems.offer : [];
+  const nonOfferItems = Array.isArray(groupedItems['without-offer']) ? groupedItems['without-offer'] : [];
+
+  if (offerItems.length > 0 && nonOfferItems.length > 0) {
+    return [
+      {
+        ...order,
+        row_key: `${order?.order_id || 'order'}::offer`,
+        row_items: offerItems,
+        row_offer_bucket: 'offer',
+        row_offer_label: 'Offer',
+        row_offer_variant: 'primary',
+      },
+      {
+        ...order,
+        row_key: `${order?.order_id || 'order'}::without-offer`,
+        row_items: nonOfferItems,
+        row_offer_bucket: 'without-offer',
+        row_offer_label: null,
+        row_offer_variant: null,
+      },
+    ];
+  }
+
+  if (offerItems.length > 0) {
+    return [
+      {
+        ...order,
+        row_key: `${order?.order_id || 'order'}::offer`,
+        row_items: offerItems,
+        row_offer_bucket: 'offer',
+        row_offer_label: 'Offer',
+        row_offer_variant: 'primary',
+      },
+    ];
+  }
+
+  return [
+    {
+      ...order,
+      row_key: `${order?.order_id || 'order'}::single`,
+      row_items: products,
+      row_offer_bucket: nonOfferItems.length > 0 ? 'without-offer' : null,
+      row_offer_label: null,
+      row_offer_variant: null,
+    },
+  ];
+}
+
+function getOrderSourceMeta(order) {
   const explicitSource = normalizeOrderSource(
     order?.source || order?.order_source || order?.source_type || order?.order_type || order?.type
   );
@@ -197,27 +276,31 @@ function generatePageSizeOptions(total) {
   return options;
 }
 
-export default function Orders({ showToast }) {
+export default function   Orders({ showToast }) {
   const [filter, setFilter] = useState('All');
-  const [sourceFilter, setSourceFilter] = useState('All');
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
-  const [viewingOrderId, setViewingOrderId] = useState(null);
+  const [viewingOrderKey, setViewingOrderKey] = useState(null);
   const [dateFrom, setDateFrom] = useState(getTodayDate());
   const [dateTo, setDateTo] = useState(getTodayDate());
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
-  const [sourceDropdownOpen, setSourceDropdownOpen] = useState(false);
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
   const loading = ordersResult.loading;
 
+  const displayOrders = useMemo(() => {
+    return orders.flatMap((order) => splitOrderForDisplay(order));
+  }, [orders]);
+
   const counts = useMemo(() => {
-    return orders.reduce(
+    return displayOrders.reduce(
       (acc, order) => {
         acc.all += 1;
+        if (order.row_offer_bucket === 'offer') acc.offer += 1;
+        if (order.row_offer_bucket === 'without-offer' || !order.row_offer_bucket) acc.withoutOffer += 1;
         const status = (order.status || '').toLowerCase();
         if (status === 'pending') acc.pending += 1;
         if (status === 'accepted') acc.accepted += 1;
@@ -225,9 +308,9 @@ export default function Orders({ showToast }) {
         if (status === 'dispatched') acc.dispatched += 1;
         return acc;
       },
-      { all: 0, pending: 0, accepted: 0, invoiced: 0, dispatched: 0 }
+      { all: 0, offer: 0, withoutOffer: 0, pending: 0, accepted: 0, invoiced: 0, dispatched: 0 }
     );
-  }, [orders]);
+  }, [displayOrders]);
 
   const refreshOrders = () => {
     dataCache.clear('orders');
@@ -248,7 +331,6 @@ export default function Orders({ showToast }) {
       'Phone': order.phone_number || '—',
       'Date': order.created_at ? formatDateToDDMMYYYY(order.created_at) : '—',
       'Time': order.created_at ? formatTimeTo12Hour(order.created_at) : '—',
-      'Order Source': getOrderSourceMeta(order).label,
       'Status': order.status || '—',
     }));
 
@@ -368,21 +450,18 @@ export default function Orders({ showToast }) {
   const filtered = useMemo(() => {
     const term = search.trim().toLowerCase();
 
-    return orders.filter((order) => {
-      const sourceMeta = getOrderSourceMeta(order);
-      const orderSource = (sourceMeta.label || '').toLowerCase().trim();
+    return displayOrders.filter((order) => {
       const status = (order.status || '').toLowerCase().trim();
+      const offerBucket = order.row_offer_bucket || 'without-offer';
       const matchesFilter =
         filter === 'All' ||
+        (filter === 'Offer' && offerBucket === 'offer') ||
+        (filter === 'Without Offer' && offerBucket !== 'offer') ||
         (filter === 'Pending' && status === 'pending') ||
         (filter === 'Accepted' && status === 'accepted') ||
         (filter === 'Invoiced' && status === 'invoiced') ||
         (filter === 'Dispatched' && status === 'dispatched');
 
-      const matchesSource =
-        sourceFilter === 'All' ||
-        (sourceFilter === 'Offer' && orderSource === 'offer') ||
-        (sourceFilter === 'Without Offer' && orderSource === 'without offer');
 
       // Date filtering
       let matchesDate = true;
@@ -406,9 +485,11 @@ export default function Orders({ showToast }) {
         if (order.customer_code?.toLowerCase().includes(term)) return true;
         if (order.phone_number?.toLowerCase().includes(term)) return true;
 
-        // Search within products array if present
-        if (Array.isArray(order.products)) {
-          for (const p of order.products) {
+        if (order.row_offer_label?.toLowerCase().includes(term)) return true;
+
+        // Search within split row items if present
+        if (Array.isArray(order.row_items)) {
+          for (const p of order.row_items) {
             if (p?.item_code?.toLowerCase().includes(term)) return true;
             if (p?.item_name?.toLowerCase().includes(term)) return true;
             if (p?.barcode?.toLowerCase().includes(term)) return true;
@@ -418,9 +499,9 @@ export default function Orders({ showToast }) {
         return false;
       })();
 
-      return matchesFilter && matchesSource && matchesSearch && matchesDate;
+      return matchesFilter && matchesSearch && matchesDate;
     });
-  }, [orders, search, filter, sourceFilter, dateFrom, dateTo]);
+  }, [displayOrders, search, filter, dateFrom, dateTo]);
 
   const {
     currentPage,
@@ -431,9 +512,11 @@ export default function Orders({ showToast }) {
   } = usePagination(filtered, itemsPerPage);
 
   const orderItems = useMemo(() => {
-    if (!viewingOrderId) return [];
-    const sel = orders.find((o) => o.order_id === viewingOrderId);
+    if (!viewingOrderKey) return [];
+    const sel = displayOrders.find((o) => o.row_key === viewingOrderKey);
     if (!sel) return [];
+    if (Array.isArray(sel.row_items) && sel.row_items.length > 0) return sel.row_items;
+
     // Prefer `products` array from API, but handle older flat structure too
     if (Array.isArray(sel.products)) return sel.products;
 
@@ -446,13 +529,17 @@ export default function Orders({ showToast }) {
           barcode: sel.barcode,
           quantity: sel.quantity,
           rate: sel.rate,
-          offer_status: sel.offer_status,
         },
       ];
     }
 
     return [];
-  }, [orders, viewingOrderId]);
+  }, [displayOrders, viewingOrderKey]);
+
+  const viewingOrder = useMemo(() => {
+    if (!viewingOrderKey) return null;
+    return displayOrders.find((order) => order.row_key === viewingOrderKey) || null;
+  }, [displayOrders, viewingOrderKey]);
 
   if (loading) {
     return (
@@ -495,6 +582,8 @@ export default function Orders({ showToast }) {
                 {FILTERS.map((item) => {
                   let count = 0;
                   if (item.id === 'All') count = counts.all;
+                  else if (item.id === 'Offer') count = counts.offer;
+                  else if (item.id === 'Without Offer') count = counts.withoutOffer;
                   else if (item.id === 'Pending') count = counts.pending;
                   else if (item.id === 'Accepted') count = counts.accepted;
                   else if (item.id === 'Invoiced') count = counts.invoiced;
@@ -519,36 +608,7 @@ export default function Orders({ showToast }) {
             )}
           </div>
 
-          <div className="order-filter-dropdown">
-            <button 
-              type="button" 
-              className="order-filter-dropdown__button"
-              onClick={() => setSourceDropdownOpen(!sourceDropdownOpen)}
-              aria-expanded={sourceDropdownOpen}
-            >
-              Source: {sourceFilter}
-              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
-                <polyline points="6 9 12 15 18 9"></polyline>
-              </svg>
-            </button>
-            {sourceDropdownOpen && (
-              <div className="order-filter-dropdown__menu">
-                {['All', 'Offer', 'Without Offer'].map((item) => (
-                  <button
-                    key={item}
-                    type="button"
-                    className={`order-filter-dropdown__item ${sourceFilter === item ? 'order-filter-dropdown__item--active' : ''}`}
-                    onClick={() => {
-                      setSourceFilter(item);
-                      setSourceDropdownOpen(false);
-                    }}
-                  >
-                    <span>{item}</span>
-                  </button>
-                ))}
-              </div>
-            )}
-          </div>
+          
 
           <div className="orders-rowcount-mini">
             <select 
@@ -636,13 +696,11 @@ export default function Orders({ showToast }) {
                     <th>CUSTOMER</th>
                     <th>NUMBER</th>
                     <th>ITEM</th>
-                    <th>SOURCE</th>
                     <th>STATUS</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentItems.map((row) => {
-                    const sourceMeta = getOrderSourceMeta(row);
                     const status = (row.status || '').toLowerCase().trim();
                     const actionValue =
                       status === 'accepted' ? 'accepted' :
@@ -659,8 +717,17 @@ export default function Orders({ showToast }) {
                             : 'orders-action-select--pending';
 
                     return (
-                      <tr key={row.order_id}>
-                        <td className="orders-table__id" title={row.order_id}>{row.order_id || '—'}</td>
+                      <tr key={row.row_key || row.order_id}>
+                        <td className="orders-table__id" title={row.order_id}>
+                          <div className="orders-id-stack">
+                            <span>{row.order_id || '—'}</span>
+                            {row.row_offer_label ? (
+                              <Badge variant={row.row_offer_variant || 'default'} size="sm">
+                                {row.row_offer_label}
+                              </Badge>
+                            ) : null}
+                          </div>
+                        </td>
                         <td title={row.created_at}>
                           {row.created_at ? (
                             <div className="orders-date-stack">
@@ -677,17 +744,12 @@ export default function Orders({ showToast }) {
                         <td>
                           <button
                             className="orders-view-btn"
-                            onClick={() => setViewingOrderId(row.order_id)}
+                            onClick={() => setViewingOrderKey(row.row_key)}
                             title="View all items"
                           >
                             <i className="fa-solid fa-eye" aria-hidden="true" style={{ marginRight: 8 }}></i>
                             View Items
                           </button>
-                        </td>
-                        <td title={sourceMeta.title}>
-                          <Badge variant={sourceMeta.variant} size="sm">
-                            {sourceMeta.label}
-                          </Badge>
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
@@ -727,12 +789,12 @@ export default function Orders({ showToast }) {
         )}
       </div>
 
-      {viewingOrderId && (
-        <div className="orders-modal-overlay" onClick={() => setViewingOrderId(null)}>
+      {viewingOrderKey && (
+        <div className="orders-modal-overlay" onClick={() => setViewingOrderKey(null)}>
           <div className="orders-modal" onClick={(e) => e.stopPropagation()}>
             <div className="orders-modal-header">
-              <h2>Order Items - {viewingOrderId}</h2>
-              <button className="orders-modal-close" onClick={() => setViewingOrderId(null)}>✕</button>
+              <h2>Order Items - {viewingOrder?.order_id || 'Order'}</h2>
+              <button className="orders-modal-close" onClick={() => setViewingOrderKey(null)}>✕</button>
             </div>
             <div className="orders-modal-body">
               <table className="orders-modal-table">
@@ -740,7 +802,6 @@ export default function Orders({ showToast }) {
                   <tr>
                     <th>ITEM CODE</th>
                     <th>ITEM NAME</th>
-                    <th>OFFER</th>
                     <th>QTY</th>
                     <th>RATE</th>
                   </tr>
@@ -750,14 +811,6 @@ export default function Orders({ showToast }) {
                     <tr key={idx}>
                       <td>{item.item_code || '—'}</td>
                       <td><OrderCell title={item.item_name || '—'} sub={item.barcode || '—'} /></td>
-                      <td>
-                        <Badge
-                          variant={(normalizeOrderSource(item.offer_status) === 'yes' || normalizeOrderSource(item.offer_status) === 'offer') ? 'primary' : 'default'}
-                          size="sm"
-                        >
-                          {item.offer_status || 'Without Offer'}
-                        </Badge>
-                      </td>
                       <td>{item.quantity ?? 0}</td>
                       <td>₹ {Number(item.rate || 0).toLocaleString('en-IN')}</td>
                     </tr>
@@ -1044,6 +1097,13 @@ export default function Orders({ showToast }) {
           white-space: nowrap;
         }
 
+        .orders-id-stack {
+          display: flex;
+          flex-direction: column;
+          gap: 6px;
+          align-items: flex-start;
+        }
+
         .orders-table__id {
           overflow: visible;
           text-overflow: clip;
@@ -1073,12 +1133,7 @@ export default function Orders({ showToast }) {
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
-          width: 12%;
-        }
-
-        .orders-table th:nth-child(8),
-        .orders-table td:nth-child(8) {
-          width: 14%;
+          width: 16%;
         }
 
         .orders-table__action {
