@@ -1,8 +1,9 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef, useCallback } from 'react';
 import Button from '../components/Button';
 import Input from '../components/Input';
-import Spinner from '../components/Spinner';
+import BarcodeInput from '../components/BarcodeInput';
 import { bannerAPI, productBatchAPI, resolveMediaUrl } from '../Services/api';
+import { useBarcodeCache } from '../hooks/useBarcodeCache';
 
 export default function Banneradd({
   onBannerAdded,
@@ -19,94 +20,183 @@ export default function Banneradd({
   });
 
   const [imagePreviews, setImagePreviews] = useState([]);
-
   const [loading, setLoading] = useState(false);
-  const [itemsLoading, setItemsLoading] = useState(false);
-
+  const [barcodeLoading, setBarcodeLoading] = useState(false);
   const [error, setError] = useState('');
-  const [allItems, setAllItems] = useState([]);
-  const [searchResults, setSearchResults] = useState([]);
-  const [itemSearch, setItemSearch] = useState('');
-  const [showItemsDropdown, setShowItemsDropdown] = useState(false);
+  const [selectedProducts, setSelectedProducts] = useState([]);
+  
+  const barcodeInputRef = useRef(null);
+  const abortControllerRef = useRef(null);
+  
+  // Use barcode cache to avoid duplicate API calls
+  const { getFromCache, setInCache, isCached } = useBarcodeCache();
 
-  // ================= ITEM SEARCH =================
-  useEffect(() => {
-    const searchTerm = itemSearch.trim();
+  // ================= EXTRACT ITEM CODE =================
+  const extractItemCode = useCallback((item) => {
+    let code = item?.code || item?.barcode || item?.id;
+    if (typeof code === 'object') {
+      code = String(Object.values(code)[0] || code);
+    }
+    code = String(code || '').trim();
+    code = code.split(':')[0].trim();
+    return code;
+  }, []);
 
-    if (searchTerm.length < 2) {
-      setSearchResults([]);
-      setItemsLoading(false);
+  // ================= BARCODE SEARCH HANDLER =================
+  const handleBarcodeSearch = useCallback(async (barcode) => {
+    const trimmedBarcode = String(barcode || '').trim();
+    
+    if (!trimmedBarcode) {
+      barcodeInputRef.current?.showError('Please enter a barcode');
       return;
     }
 
-    const abortController = new AbortController();
+    // Cancel any previous request
+    if (abortControllerRef.current) {
+      abortControllerRef.current.abort();
+    }
+    abortControllerRef.current = new AbortController();
 
-    const timer = setTimeout(async () => {
-      try {
-        setItemsLoading(true);
-        const response = await productBatchAPI.searchItems(
-          searchTerm,
-          abortController.signal
-        );
-        const payload = response?.data;
-        const apiItems = Array.isArray(payload)
-          ? payload
-          : Array.isArray(payload?.results)
-            ? payload.results
-            : [];
+    try {
+      setBarcodeLoading(true);
 
-        // Keep only code/barcode matches for accurate barcode search.
-        const normalizedSearch = searchTerm.toLowerCase();
-        const matchedItems = apiItems.filter((item) => {
-          const code = String(item?.code || '').toLowerCase();
-          const barcode = String(item?.barcode || '').toLowerCase();
-          return code.includes(normalizedSearch) || barcode.includes(normalizedSearch);
-        });
-
-        setSearchResults(matchedItems.slice(0, 20));
-
-        // Cache returned items for selected-cards rendering.
-        setAllItems((prev) => {
-          const map = new Map(
-            prev.map((item) => [extractItemCode(item), item])
-          );
-          matchedItems.forEach((item) => {
-            map.set(extractItemCode(item), item);
-          });
-          return Array.from(map.values());
-        });
-      } catch (err) {
-        if (err.name === 'AbortError') {
+      // Check cache first to avoid API call
+      if (isCached(trimmedBarcode)) {
+        const cachedProduct = getFromCache(trimmedBarcode);
+        if (cachedProduct) {
+          // Check if already added
+          if (selectedProducts.some(p => extractItemCode(p) === extractItemCode(cachedProduct))) {
+            barcodeInputRef.current?.clearInput();
+            return;
+          }
+          // Add product and show success
+          setSelectedProducts(prev => [...prev, cachedProduct]);
+          setFormData(prev => ({
+            ...prev,
+            item_codes: [...prev.item_codes, extractItemCode(cachedProduct)],
+          }));
+          barcodeInputRef.current?.showSuccess();
           return;
         }
-        console.error('Error searching items:', err);
-        setSearchResults([]);
-        showToast?.('Failed to search items', 'error');
-      } finally {
-        setItemsLoading(false);
       }
-    }, 150);
 
-    return () => {
-      clearTimeout(timer);
-      abortController.abort();
-    };
-  }, [itemSearch, showToast]);
+      // API Call: Search by exact barcode with AbortController
+      const response = await productBatchAPI.searchItemByBarcode(
+        trimmedBarcode,
+        abortControllerRef.current.signal
+      );
+
+      const payload = response?.data;
+      const items = Array.isArray(payload)
+        ? payload
+        : Array.isArray(payload?.results)
+          ? payload.results
+          : [];
+
+      console.log('🔍 Barcode Search Debug:', {
+        searchedBarcode: trimmedBarcode,
+        apiResponse: payload,
+        itemsFound: items.length,
+        items: items.map(i => ({
+          id: i?.id,
+          barcode: i?.barcode,
+          code: i?.code,
+          name: i?.name,
+        })),
+      });
+
+      if (items.length === 0) {
+        barcodeInputRef.current?.showError('Product Not Found');
+        return;
+      }
+
+      // Find exact barcode match (strict matching - no fallback)
+      let product = items.find(item => {
+        const itemBarcode = String(item?.barcode || '').trim();
+        return itemBarcode === trimmedBarcode;
+      });
+
+      // Fallback: if no exact match, try case-insensitive match
+      if (!product) {
+        product = items.find(item => {
+          const itemBarcode = String(item?.barcode || '').toLowerCase().trim();
+          return itemBarcode === trimmedBarcode.toLowerCase();
+        });
+      }
+
+      // If still no match found, do NOT fallback to items[0] - show error instead
+      if (!product) {
+        barcodeInputRef.current?.showError('Product Not Found');
+        return;
+      }
+
+      console.log('✅ Selected Product:', {
+        selectedProduct: {
+          id: product?.id,
+          barcode: product?.barcode,
+          code: product?.code,
+          name: product?.name,
+          price: product?.fourthprice || product?.salesprice || product?.price,
+        },
+      });
+
+      if (!product) {
+        barcodeInputRef.current?.showError('Product Not Found');
+        return;
+      }
+
+      // Check if already added (by exact item code match)
+      const itemCode = extractItemCode(product);
+      if (selectedProducts.some(p => extractItemCode(p) === itemCode)) {
+        barcodeInputRef.current?.clearInput();
+        return;
+      }
+
+      // Cache the result
+      setInCache(trimmedBarcode, product);
+
+      // Add to selected products
+      setSelectedProducts(prev => [...prev, product]);
+      setFormData(prev => ({
+        ...prev,
+        item_codes: [...prev.item_codes, itemCode],
+      }));
+
+      // Show success message and clear input
+      barcodeInputRef.current?.showSuccess();
+
+    } catch (err) {
+      if (err.name === 'AbortError') {
+        console.log('Barcode search cancelled');
+        return;
+      }
+      console.error('Barcode search error:', err);
+      barcodeInputRef.current?.clearInput();
+    } finally {
+      setBarcodeLoading(false);
+    }
+  }, [selectedProducts, isCached, getFromCache, setInCache, showToast, extractItemCode]);
+
+  // ================= REMOVE PRODUCT =================
+  const handleRemoveProduct = useCallback((itemCode) => {
+    setSelectedProducts(prev => 
+      prev.filter(p => extractItemCode(p) !== itemCode)
+    );
+    setFormData(prev => ({
+      ...prev,
+      item_codes: prev.item_codes.filter(code => code !== itemCode),
+    }));
+  }, [extractItemCode]);
 
   // ================= EDIT MODE =================
   useEffect(() => {
-
     if (bannerToEdit) {
-
-      // Normalize item_codes to ensure they're strings
       let itemCodes = bannerToEdit.item_codes || bannerToEdit.items || [];
       if (!Array.isArray(itemCodes)) {
         itemCodes = Object.values(itemCodes || {});
       }
       
-      // Ensure all codes are strings and cleaned
       itemCodes = itemCodes.map(code => {
-        // If it's an object, extract the code field or id
         if (typeof code === 'object' && code !== null) {
           code = code.code || code.id || code.item_code || String(code);
         }
@@ -134,7 +224,40 @@ export default function Banneradd({
         item_codes: itemCodes,
       });
 
-      // Load banner image preview if editing
+      // Fetch full product details for existing item_codes
+      const fetchProducts = async () => {
+        try {
+          const products = [];
+          for (const code of itemCodes) {
+            const response = await productBatchAPI.getProductByCode(code);
+            const payload = response?.data;
+            let product = null;
+            
+            if (Array.isArray(payload)) {
+              product = payload[0];
+            } else if (payload && typeof payload === 'object' && !Array.isArray(payload)) {
+              product = payload?.results?.[0] || payload;
+            }
+            
+            if (product && product.id) {
+              products.push(product);
+              // Cache the product for faster lookup
+              const barcode = String(product?.barcode || '').trim();
+              if (barcode) {
+                setInCache(barcode, product);
+              }
+            }
+          }
+          setSelectedProducts(products);
+        } catch (err) {
+          console.error('Error fetching products for edit mode:', err);
+        }
+      };
+
+      if (itemCodes.length > 0) {
+        fetchProducts();
+      }
+
       if (bannerToEdit.image || bannerToEdit.image_url || bannerToEdit.banner_image) {
         const imageUrl = resolveMediaUrl(
           bannerToEdit.image || 
@@ -146,8 +269,7 @@ export default function Banneradd({
         setImagePreviews([]);
       }
     }
-
-  }, [bannerToEdit]);
+  }, [bannerToEdit, setInCache]);
 
   useEffect(() => {
     return () => {
@@ -161,9 +283,7 @@ export default function Banneradd({
 
   // ================= INPUT CHANGE =================
   const handleInputChange = (e) => {
-
     const { name, value } = e.target;
-
     setFormData((prev) => ({
       ...prev,
       [name]: value,
@@ -172,13 +292,11 @@ export default function Banneradd({
 
   // ================= IMAGE CHANGE =================
   const handleImageChange = (e) => {
-
     const files = Array.from(e.target.files || []);
 
     if (files.length > 0) {
       const file = files[0];
       
-      // Check file size (max 1MB)
       const maxSize = 1 * 1024 * 1024; // 1MB
       if (file.size > maxSize) {
         setError('Image size must be less than 1MB');
@@ -186,7 +304,6 @@ export default function Banneradd({
         return;
       }
 
-      // Check file type
       if (!file.type.startsWith('image/')) {
         setError('Please select a valid image file');
         showToast?.('Please select a valid image file', 'error');
@@ -205,10 +322,8 @@ export default function Banneradd({
             URL.revokeObjectURL(preview);
           }
         });
-
         return [URL.createObjectURL(file)];
       });
-
     } else {
       setFormData((prev) => ({
         ...prev,
@@ -218,120 +333,51 @@ export default function Banneradd({
     }
   };
 
-  // ================= ITEM SELECTION =================
-  const extractItemCode = (item) => {
-    // Prioritize 'code' field (simpler codes like "08308")
-    // Fall back to barcode only if code doesn't exist
-    let code = item?.code || item?.barcode || item?.id;
-    
-    // If it's an object, extract string representation
-    if (typeof code === 'object') {
-      code = String(Object.values(code)[0] || code);
-    }
-    
-    // Convert to string and trim
-    code = String(code || '').trim();
-    
-    // Remove any trailing info like " : 1"
-    code = code.split(':')[0].trim();
-    
-    return code;
-  };
-
-  const handleItemToggle = (item) => {
-    const itemCode = extractItemCode(item);
-    if (!itemCode) {
-      console.warn('Invalid item code extracted:', item);
-      return;
-    }
-    
-    setFormData((prev) => ({
-      ...prev,
-      item_codes: prev.item_codes.includes(itemCode)
-        ? prev.item_codes.filter((code) => code !== itemCode)
-        : [...prev.item_codes, itemCode],
-    }));
-  };
-
-  const searchTerm = itemSearch.trim();
-
-  const filteredItems = searchResults;
-
-  const selectedItemsList = allItems.filter((item) => {
-    const itemCode = extractItemCode(item);
-    return formData.item_codes.includes(itemCode);
-  }).concat(
-    // Also include items that are in item_codes but not in allItems (for display purposes)
-    formData.item_codes
-      .filter(code => !allItems.some(item => extractItemCode(item) === code))
-      .map(code => ({
-        code,
-        name: code,
-        id: code,
-      }))
-  );
-
   // ================= SUBMIT =================
   const handleSubmit = async (e) => {
-
     e.preventDefault();
-
     setError('');
 
     if (!formData.title.trim()) {
-
       setError('Offer Title is required');
-
       return;
     }
 
     if (!formData.caption.trim()) {
-
       setError('Caption is required');
-
       return;
     }
 
     if (!bannerToEdit && formData.images.length === 0) {
-
       setError('Image is required');
-
       return;
     }
 
     try {
-
       setLoading(true);
 
       const data = new FormData();
       data.append('title', formData.title.trim());
       data.append('body', formData.caption.trim());
 
-      // Append item codes if selected - send each code separately
       if (formData.item_codes.length > 0) {
-        // Clean each item code
         const cleanedCodes = formData.item_codes.map(code => {
           const cleaned = String(code).split(':')[0].trim();
           return cleaned;
         });
-        console.log('Final item codes being sent (one by one):', cleanedCodes);
-        // Append each code separately to FormData
+        console.log('Final item codes being sent:', cleanedCodes);
         cleanedCodes.forEach(code => {
           data.append('item_codes', code);
         });
       }
 
-      // Append image file if provided
       if (formData.images.length > 0) {
         data.append('image', formData.images[0]);
       }
 
-      // Call the banner API to save
       if (bannerToEdit) {
-        // Use edit endpoint for updates
         await bannerAPI.editBanner(bannerToEdit.id, data);
       } else {
-        // Use upload endpoint for new banners
         await bannerAPI.uploadBanner(data);
       }
 
@@ -343,7 +389,6 @@ export default function Banneradd({
       onBannerAdded?.();
 
     } catch (error) {
-
       console.error('Save Offer Zone Error:', error);
 
       let errorMsg = 'Failed to save offer zone';
@@ -360,307 +405,154 @@ export default function Banneradd({
       showToast?.(errorMsg, 'error');
 
     } finally {
-
       setLoading(false);
-
     }
   };
 
+  // ================= CLEANUP =================
+  useEffect(() => {
+    return () => {
+      if (abortControllerRef.current) {
+        abortControllerRef.current.abort();
+      }
+    };
+  }, []);
+
   return (
-
     <div className="page">
-
       <div className="page__header">
-
         <h1 className="page__title">
-          {bannerToEdit
-            ? 'Edit Offer Zone'
-            : 'Add Offer Zone'}
+          {bannerToEdit ? 'Edit Offer Zone' : 'Add Offer Zone'}
         </h1>
-
       </div>
 
-      <div style={{
-        maxWidth: '600px',
-      }}>
-
+      <div style={{ maxWidth: '600px' }}>
         <form onSubmit={handleSubmit}>
 
           {error && (
-
             <div className="alert alert-error">
               {error}
             </div>
-
           )}
 
-          {/* ================= 1. ITEMS SELECTION ================= */}
-          <div style={{
-            marginTop: '0px',
-            marginBottom: '16px',
-          }}>
-            <label className="field__label">
-              Select Items for Offer
-            </label>
+          {/* ================= 1. BARCODE SCANNER ================= */}
+          <BarcodeInput
+            ref={barcodeInputRef}
+            onSearch={handleBarcodeSearch}
+            isLoading={barcodeLoading}
+            minBarcodeLength={6}
+          />
 
+          {/* ================= 2. SELECTED PRODUCTS ================= */}
+          {selectedProducts.length > 0 && (
             <div style={{
-              position: 'relative',
-              marginTop: '8px',
+              marginTop: '16px',
+              marginBottom: '16px',
+              padding: '12px',
+              backgroundColor: '#f9fafb',
+              borderRadius: '8px',
+              border: '1px solid #e5e7eb',
             }}>
-              <input
-                type="text"
-                placeholder="Type barcode or item code to search..."
-                value={itemSearch}
-                onChange={(e) => {
-                  const value = e.target.value;
-                  setItemSearch(value);
-                  setShowItemsDropdown(value.trim().length >= 2);
-                }}
-                onFocus={() => {
-                  setShowItemsDropdown(searchTerm.length >= 2);
-                }}
-                style={{
-                  width: '100%',
-                  padding: '10px 12px',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  fontSize: '14px',
-                  fontFamily: 'inherit',
-                }}
-              />
+              <div style={{
+                fontSize: '13px',
+                fontWeight: '600',
+                marginBottom: '12px',
+                color: '#1f2937',
+              }}>
+                ✓ Selected Products ({selectedProducts.length})
+              </div>
+              <div style={{
+                display: 'grid',
+                gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
+                gap: '12px',
+              }}>
+                {selectedProducts.map((product) => {
+                  const itemCode = extractItemCode(product);
+                  const itemName = product.name || product.title || itemCode || 'Item';
+                  const itemPrice = product.fourthprice || product.salesprice || product.price || 0;
+                  const itemBarcode = product.barcode || itemCode;
 
-              {showItemsDropdown && searchTerm.length >= 2 && (
-                <div style={{
-                  position: 'absolute',
-                  top: '100%',
-                  left: 0,
-                  right: 0,
-                  marginTop: '4px',
-                  backgroundColor: '#fff',
-                  border: '1px solid #e5e7eb',
-                  borderRadius: '6px',
-                  maxHeight: '250px',
-                  overflowY: 'auto',
-                  zIndex: 100,
-                  boxShadow: '0 4px 6px rgba(0, 0, 0, 0.1)',
-                }}>
-                  {itemsLoading ? (
-                    <div style={{ padding: '12px', textAlign: 'center', color: '#6b7280', display: 'flex', flexDirection: 'column', alignItems: 'center', gap: '10px' }}>
-                      <div style={{ display: 'flex', alignItems: 'center', gap: '8px' }}>
-                        <Spinner size="md" color="#f59e0b" />
-                        <div style={{ color: '#6b7280' }}>Searching items…</div>
-                      </div>
-
-                      <div style={{ width: '100%', marginTop: '8px', display: 'grid', gap: '8px' }}>
-                        {[1,2,3].map((i) => (
-                          <div key={i} style={{ display: 'flex', gap: '12px', alignItems: 'center', padding: '8px 12px' }}>
-                            <div style={{ width: '16px', height: '16px', background: '#e5e7eb', borderRadius: '2px', animation: 'pulse 1.6s infinite' }} />
-                            <div style={{ flex: 1 }}>
-                              <div style={{ height: '12px', width: '60%', background: '#e5e7eb', borderRadius: '4px', marginBottom: '6px', animation: 'pulse 1.6s infinite' }} />
-                              <div style={{ height: '10px', width: '40%', background: '#f3f4f6', borderRadius: '4px', animation: 'pulse 1.6s infinite' }} />
-                            </div>
-                          </div>
-                        ))}
-                      </div>
-
-                      <style>{`@keyframes pulse { 0%,100%{opacity:0.6}50%{opacity:1} }`}</style>
-                    </div>
-                  ) : filteredItems.length > 0 ? (
-                    filteredItems.map((item) => {
-                      const itemCode = extractItemCode(item);
-                      const isSelected = formData.item_codes.includes(itemCode);
-                      const itemName = item.name || item.title || 'N/A';
-                      const itemPrice = item.fourthprice || item.salesprice || item.price || 0;
-                      const itemImage = item.url2 || item.image || '';
-                      const itemBrand = item.brand || '';
-
-                      return (
-                        <label
-                          key={itemCode}
+                  return (
+                    <div
+                      key={itemCode}
+                      style={{
+                        position: 'relative',
+                        backgroundColor: '#fff',
+                        borderRadius: '8px',
+                        border: '2px solid #10b981',
+                        overflow: 'hidden',
+                        transition: 'all 0.2s',
+                      }}
+                      onMouseEnter={(e) => {
+                        e.currentTarget.style.boxShadow = '0 4px 12px rgba(16, 185, 129, 0.2)';
+                      }}
+                      onMouseLeave={(e) => {
+                        e.currentTarget.style.boxShadow = 'none';
+                      }}
+                    >
+                      <div style={{ padding: '8px' }}>
+                        <div style={{
+                          fontSize: '11px',
+                          fontWeight: '600',
+                          color: '#1f2937',
+                          marginBottom: '4px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {itemName}
+                        </div>
+                        <div style={{
+                          fontSize: '10px',
+                          color: '#6b7280',
+                          marginBottom: '4px',
+                          overflow: 'hidden',
+                          textOverflow: 'ellipsis',
+                          whiteSpace: 'nowrap',
+                        }}>
+                          {itemBarcode}
+                        </div>
+                        <div style={{
+                          fontSize: '12px',
+                          color: '#059669',
+                          fontWeight: '600',
+                          marginBottom: '8px',
+                        }}>
+                          ₹ {Number(itemPrice || 0).toFixed(2)}
+                        </div>
+                        <button
+                          type="button"
+                          onClick={() => handleRemoveProduct(itemCode)}
                           style={{
-                            display: 'flex',
-                            alignItems: 'center',
-                            padding: '12px',
+                            width: '100%',
+                            padding: '4px 8px',
+                            backgroundColor: '#fee2e2',
+                            color: '#dc2626',
+                            border: 'none',
+                            borderRadius: '4px',
+                            fontSize: '11px',
+                            fontWeight: '500',
                             cursor: 'pointer',
-                            backgroundColor: isSelected ? '#f3f4f6' : '#fff',
-                            borderBottom: '1px solid #f3f4f6',
-                            transition: 'background-color 0.2s',
-                            gap: '12px',
+                            transition: 'all 0.2s',
                           }}
                           onMouseEnter={(e) => {
-                            if (!isSelected) e.currentTarget.style.backgroundColor = '#f9fafb';
+                            e.currentTarget.style.backgroundColor = '#fca5a5';
                           }}
                           onMouseLeave={(e) => {
-                            e.currentTarget.style.backgroundColor = isSelected ? '#f3f4f6' : '#fff';
+                            e.currentTarget.style.backgroundColor = '#fee2e2';
                           }}
                         >
-                          <input
-                            type="checkbox"
-                            checked={isSelected}
-                            onChange={() => handleItemToggle(item)}
-                            style={{
-                              minWidth: '16px',
-                              width: '16px',
-                              height: '16px',
-                              cursor: 'pointer',
-                            }}
-                          />
-                          
-                          {/* Item Image */}
-                          {itemImage && (
-                            <img
-                              src={itemImage}
-                              alt={itemName}
-                              style={{
-                                width: '48px',
-                                height: '48px',
-                                objectFit: 'cover',
-                                borderRadius: '4px',
-                                backgroundColor: '#f3f4f6',
-                              }}
-                            />
-                          )}
-                          
-                          {/* Item Details */}
-                          <div style={{ flex: 1 }}>
-                            <div style={{ fontSize: '13px', fontWeight: '600', color: '#1f2937' }}>
-                              {itemName}
-                            </div>
-                            <div style={{ fontSize: '11px', color: '#6b7280', marginTop: '2px' }}>
-                              Code: {itemCode} {itemBrand && `• ${itemBrand}`}
-                            </div>
-                            <div style={{ fontSize: '12px', color: '#059669', fontWeight: '500', marginTop: '2px' }}>
-                              ₹ {Number(itemPrice || 0).toFixed(2)}
-                            </div>
-                          </div>
-                        </label>
-                      );
-                    })
-                  ) : (
-                    <div style={{ padding: '12px', textAlign: 'center', color: '#9ca3af' }}>
-                      No matching items found for this code
-                    </div>
-                  )}
-                </div>
-              )}
-            </div>
-
-            {/* Display selected items */}
-            {selectedItemsList.length > 0 && (
-              <div style={{
-                marginTop: '16px',
-                padding: '12px',
-                backgroundColor: '#f9fafb',
-                borderRadius: '8px',
-                border: '1px solid #e5e7eb',
-              }}>
-                <div style={{ fontSize: '13px', fontWeight: '600', marginBottom: '12px', color: '#1f2937' }}>
-                  Selected Items ({selectedItemsList.length})
-                </div>
-                <div style={{
-                  display: 'grid',
-                  gridTemplateColumns: 'repeat(auto-fill, minmax(140px, 1fr))',
-                  gap: '12px',
-                }}>
-                  {selectedItemsList.map((item) => {
-                    const itemCode = extractItemCode(item);
-                    // Use proper item name, with fallback to code
-                    const itemName = item.name || item.title || itemCode || 'Item';
-                    const itemPrice = item.fourthprice || item.salesprice || item.price || 0;
-                    const itemImage = item.url2 || item.image || '';
-
-                    return (
-                      <div
-                        key={itemCode}
-                        style={{
-                          position: 'relative',
-                          backgroundColor: '#fff',
-                          borderRadius: '8px',
-                          border: '2px solid #4f46e5',
-                          overflow: 'hidden',
-                          transition: 'all 0.2s',
-                        }}
-                        onMouseEnter={(e) => {
-                          e.currentTarget.style.boxShadow = '0 4px 12px rgba(79, 70, 229, 0.2)';
-                        }}
-                        onMouseLeave={(e) => {
-                          e.currentTarget.style.boxShadow = 'none';
-                        }}
-                      >
-                        {/* Image */}
-                        {itemImage && (
-                          <img
-                            src={itemImage}
-                            alt={itemName}
-                            style={{
-                              width: '100%',
-                              height: '100px',
-                              objectFit: 'cover',
-                              backgroundColor: '#f3f4f6',
-                            }}
-                          />
-                        )}
-                        
-                        {/* Content */}
-                        <div style={{ padding: '8px' }}>
-                          <div style={{ fontSize: '11px', fontWeight: '600', color: '#1f2937', marginBottom: '4px', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>
-                            {itemName}
-                          </div>
-                          <div style={{ fontSize: '10px', color: '#6b7280', marginBottom: '4px' }}>
-                            {itemCode}
-                          </div>
-                          <div style={{ fontSize: '12px', color: '#059669', fontWeight: '600', marginBottom: '8px' }}>
-                            ₹ {Number(itemPrice || 0).toFixed(2)}
-                          </div>
-                          <button
-                            type="button"
-                            onClick={() => handleItemToggle(item)}
-                            style={{
-                              width: '100%',
-                              padding: '4px 8px',
-                              backgroundColor: '#fee2e2',
-                              color: '#dc2626',
-                              border: 'none',
-                              borderRadius: '4px',
-                              fontSize: '11px',
-                              fontWeight: '500',
-                              cursor: 'pointer',
-                              transition: 'all 0.2s',
-                            }}
-                            onMouseEnter={(e) => {
-                              e.currentTarget.style.backgroundColor = '#fca5a5';
-                            }}
-                            onMouseLeave={(e) => {
-                              e.currentTarget.style.backgroundColor = '#fee2e2';
-                            }}
-                          >
-                            Remove
-                          </button>
-                        </div>
+                          Remove
+                        </button>
                       </div>
-                    );
-                  })}
-                </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
-          </div>
-
-          {/* Close dropdown when clicking outside */}
-          {showItemsDropdown && (
-            <div
-              style={{
-                position: 'fixed',
-                top: 0,
-                left: 0,
-                right: 0,
-                bottom: 0,
-                zIndex: 99,
-              }}
-              onClick={() => setShowItemsDropdown(false)}
-            />
+            </div>
           )}
 
-          {/* ================= 2. OFFER TITLE ================= */}
+          {/* ================= 3. OFFER TITLE ================= */}
           <Input
             label="Offer Title"
             name="title"
@@ -669,7 +561,7 @@ export default function Banneradd({
             placeholder="Enter offer title"
           />
 
-          {/* ================= 3. CAPTION ================= */}
+          {/* ================= 4. CAPTION ================= */}
           <Input
             label="Caption"
             name="caption"
@@ -678,12 +570,11 @@ export default function Banneradd({
             placeholder="Enter caption"
           />
 
-          {/* ================= 4. IMAGE UPLOAD ================= */}
+          {/* ================= 5. IMAGE UPLOAD ================= */}
           <div style={{
             marginTop: '16px',
             marginBottom: '16px',
           }}>
-
             <label className="field__label">
               Image
             </label>
@@ -744,11 +635,9 @@ export default function Banneradd({
                 </div>
               </label>
             </div>
-
           </div>
 
           {imagePreviews.length > 0 && (
-
             <div style={{
               marginBottom: '16px',
               marginTop: '16px',
@@ -777,16 +666,13 @@ export default function Banneradd({
                 ))}
               </div>
             </div>
-
           )}
 
-          {/* ================= 5. SUBMIT BUTTON ================= */}
-
+          {/* ================= 6. SUBMIT BUTTON ================= */}
           <div style={{
             display: 'flex',
             gap: '12px',
           }}>
-
             <Button
               type="submit"
               variant="primary"
@@ -804,13 +690,10 @@ export default function Banneradd({
             >
               Cancel
             </Button>
-
           </div>
 
         </form>
-
       </div>
-
     </div>
   );
 }

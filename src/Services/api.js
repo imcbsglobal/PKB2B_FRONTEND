@@ -242,6 +242,55 @@ export const productBatchAPI = {
       '/productbatchphoto/'
     ),
 
+  /**
+   * Search for a product by exact barcode match
+   * Optimized for barcode scanning - returns only required fields
+   * Tries multiple backend filter parameters to ensure compatibility
+   * 
+   * @param {string} barcode - The barcode to search for (exact match)
+   * @param {AbortSignal} signal - AbortController signal for cancellation
+   * @returns {Promise} API response with product data
+   */
+  searchItemByBarcode: (barcode, signal) => {
+    const term = String(barcode || '').trim();
+
+    if (!term) {
+      return Promise.resolve({ data: [] });
+    }
+
+    const encoded = encodeURIComponent(term);
+
+    // Try multiple filter strategies to handle different backend implementations
+    // Priority: barcode lookup > search parameter > code parameter
+    return apiClient.get(
+      `/productbatchphoto/?barcode=${encoded}&search=${encoded}&code=${encoded}&fields=name,barcode,fourthprice,salesprice,price,code,id&limit=1`,
+      { signal }
+    );
+  },
+
+  /**
+   * Fetch product by exact code match
+   * Used for loading existing products in edit mode
+   * 
+   * @param {string} code - The product code to search for
+   * @returns {Promise} API response with product data
+   */
+  getProductByCode: (code) => {
+    const term = String(code || '').trim();
+
+    if (!term) {
+      return Promise.resolve({ data: {} });
+    }
+
+    const encoded = encodeURIComponent(term);
+
+    // Search by code parameter to get exact product match
+    return apiClient.get(
+      `/productbatchphoto/?code=${encoded}&fields=name,barcode,fourthprice,salesprice,price,code,id&limit=1`
+    );
+  },
+
+  // Keep old method for backward compatibility
   searchItems: (query, signal) => {
     const term = String(query || '').trim();
 

@@ -18,3 +18,4 @@ export { default as DateRangePicker } from './DateRangePicker';
 export { default as MobileMenu } from './MobileMenu';
 export { default as AdvancedSearch } from './AdvancedSearch';
 export { default as EnhancedTable } from './EnhancedTable';
+export { default as BarcodeInput } from './BarcodeInput';

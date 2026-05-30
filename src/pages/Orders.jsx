@@ -24,9 +24,15 @@ function formatDateToDDMMYYYY(value) {
   if (!value) return '';
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return String(value);
-  const day = String(d.getDate()).padStart(2, '0');
-  const month = String(d.getMonth() + 1).padStart(2, '0');
-  const year = d.getFullYear();
+  
+  // Convert UTC to IST (UTC+5:30) for consistent date display
+  const utcTime = d.getTime();
+  const istOffset = 5.5 * 60 * 60 * 1000; // UTC+5:30 in milliseconds
+  const istTime = new Date(utcTime + istOffset);
+  
+  const day = String(istTime.getUTCDate()).padStart(2, '0');
+  const month = String(istTime.getUTCMonth() + 1).padStart(2, '0');
+  const year = istTime.getUTCFullYear();
   return `${day}/${month}/${year}`;
 }
 
@@ -65,8 +71,16 @@ function OrderCell({ title, sub }) {
 }
 
 function getTodayDate() {
+  // Get today's date in IST timezone
   const today = new Date();
-  return today.toISOString().split('T')[0];
+  const utcTime = today.getTime();
+  const istOffset = 5.5 * 60 * 60 * 1000; // UTC+5:30 in milliseconds
+  const istDate = new Date(utcTime + istOffset);
+  
+  const day = String(istDate.getUTCDate()).padStart(2, '0');
+  const month = String(istDate.getUTCMonth() + 1).padStart(2, '0');
+  const year = istDate.getUTCFullYear();
+  return `${year}-${month}-${day}`;
 }
 
 function normalizeOrderSource(value) {
@@ -696,6 +710,7 @@ export default function   Orders({ showToast }) {
                     <th>CUSTOMER</th>
                     <th>NUMBER</th>
                     <th>ITEM</th>
+                    <th>TYPE</th>
                     <th>STATUS</th>
                   </tr>
                 </thead>
@@ -750,6 +765,11 @@ export default function   Orders({ showToast }) {
                             <i className="fa-solid fa-eye" aria-hidden="true" style={{ marginRight: 8 }}></i>
                             View Items
                           </button>
+                        </td>
+                        <td title={row.order_type}>
+                          <Badge variant={row.order_type === 'OFFER' ? 'primary' : 'default'} size="sm">
+                            {row.order_type || '—'}
+                          </Badge>
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
@@ -1112,12 +1132,12 @@ export default function   Orders({ showToast }) {
         /* Column width distribution */
         .orders-table th:nth-child(1),
         .orders-table td:nth-child(1) {
-          width: 14%;
+          width: 12%;
         }
 
         .orders-table th:nth-child(2),
         .orders-table td:nth-child(2) {
-          width: 14%;
+          width: 12%;
         }
 
         .orders-table th:nth-child(3),
@@ -1128,11 +1148,16 @@ export default function   Orders({ showToast }) {
         .orders-table td:nth-child(5),
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 14%;
+          width: 12%;
         }
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
+          width: 12%;
+        }
+
+        .orders-table th:nth-child(8),
+        .orders-table td:nth-child(8) {
           width: 16%;
         }
 
