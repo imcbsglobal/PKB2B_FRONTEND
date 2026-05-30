@@ -2,6 +2,7 @@
 import React from 'react';
 import Badge from '../components/Badge';
 import LoadingSkeleton from '../components/LoadingSkeleton';
+import { FullPageSpinner } from '../components/Spinner';
 import { useFetchData } from '../hooks/useFetchData';
 import { orderAPI, customerAPI, productBatchAPI } from '../Services/api';
 
@@ -168,35 +169,7 @@ export default function Dashboard() {
 
   // ================= LOADING STATE =================
   if (loading) {
-    return (
-      <div className="page">
-        <div className="page__header">
-          <h1 className="page__title">Dashboard</h1>
-          <p className="page__sub">Loading real-time data...</p>
-        </div>
-
-        {/* Skeleton Stats */}
-        <div className="dash-stat-grid">
-          {Array(4).fill(0).map((_, i) => (
-            <div className="dash-stat-card" key={i}>
-              <div style={{ height: '16px', background: 'var(--color-muted)', borderRadius: '4px', marginBottom: '8px' }} />
-              <div style={{ height: '24px', background: 'var(--color-muted)', borderRadius: '4px', marginBottom: '8px' }} />
-              <div style={{ height: '12px', background: 'var(--color-muted)', borderRadius: '4px' }} />
-            </div>
-          ))}
-        </div>
-
-        {/* Skeleton Charts */}
-        <div className="dash-charts-row">
-          <div className="dash-chart-card">
-            <LoadingSkeleton rows={3} columns={4} />
-          </div>
-          <div className="dash-channel-card">
-            <LoadingSkeleton rows={3} columns={2} />
-          </div>
-        </div>
-      </div>
-    );
+    return <FullPageSpinner message="Loading Dashboard Data..." />;
   }
 
   // ================= UI =================

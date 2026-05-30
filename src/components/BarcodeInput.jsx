@@ -132,7 +132,7 @@ const BarcodeInput = forwardRef(({
       marginBottom: '16px',
     }}>
       <label className="field__label">
-        Scan Barcode
+        Select Items
       </label>
 
       <div style={{
@@ -155,7 +155,7 @@ const BarcodeInput = forwardRef(({
               value={barcode}
               onChange={handleChange}
               onKeyDown={handleKeyDown}
-              placeholder="Scan barcode or enter manually"
+              placeholder="Type Barcode "
               disabled={isLoading}
               autoComplete="off"
               style={{
