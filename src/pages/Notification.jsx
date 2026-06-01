@@ -1,4 +1,7 @@
 import React, { useState, useRef } from 'react';
+import { useToast } from '../hooks';
+
+const API_BASE_URL = 'https://pkb2backend.myimc.in/api';
 
 export default function Notification() {
   const [title, setTitle] = useState('');
@@ -7,7 +10,12 @@ export default function Notification() {
   const [imagePreview, setImagePreview] = useState(null);
   const [status, setStatus] = useState(null);
   const [history, setHistory] = useState([]);
+  const [isBroadcast, setIsBroadcast] = useState(true);
+  const [phoneNumbers, setPhoneNumbers] = useState('');
+  const [phoneNumberList, setPhoneNumberList] = useState([]);
+  const [currentPhoneInput, setCurrentPhoneInput] = useState('');
   const fileInputRef = useRef(null);
+  const { showToast } = useToast();
 
   /* image */
   const handleImageChange = (e) => {
@@ -25,36 +33,105 @@ export default function Notification() {
   /* send */
   const isValid = title.trim() && message.trim();
 
+  const handleAddPhoneNumber = () => {
+    const phone = currentPhoneInput.trim();
+    if (phone && !phoneNumberList.includes(phone)) {
+      setPhoneNumberList([...phoneNumberList, phone]);
+      setCurrentPhoneInput('');
+    }
+  };
+
+  const handleRemovePhoneNumber = (phone) => {
+    setPhoneNumberList(phoneNumberList.filter(p => p !== phone));
+  };
+
   const handleSend = async () => {
     if (!isValid) return;
     setStatus('sending');
-    await new Promise((r) => setTimeout(r, 1400));
 
-    setHistory((prev) => [
-      {
-        id: Date.now(),
-        title,
-        message,
-        imagePreview,
-        sentAt: new Date().toLocaleString('en-IN', {
-          day: '2-digit',
-          month: 'short',
-          year: 'numeric',
-          hour: '2-digit',
-          minute: '2-digit',
-        }),
-        recipientCount: 'All app users',
-      },
-      ...prev,
-    ]);
+    try {
+      const payload = {
+        title: title.trim(),
+        body: message.trim(),
+        data: { screen: 'notifications' },
+      };
 
-    setStatus('sent');
-    setTimeout(() => {
-      setTitle('');
-      setMessage('');
-      removeImage();
+      // Only add phone_numbers if not broadcasting
+      if (!isBroadcast && phoneNumberList.length > 0) {
+        payload.phone_numbers = phoneNumberList;
+      }
+
+      // Get auth token from localStorage
+      const token = localStorage.getItem('access_token');
+      const headers = {
+        'Content-Type': 'application/json',
+      };
+      
+      if (token) {
+        headers.Authorization = `Bearer ${token}`;
+      }
+
+      const response = await fetch(`${API_BASE_URL}/push/send/`, {
+        method: 'POST',
+        headers,
+        body: JSON.stringify(payload),
+      });
+
+      const result = await response.json();
+
+      if (!response.ok) {
+        let errorMessage = result.detail || result.error || 'Failed to send notification';
+        
+        if (response.status === 403) {
+          errorMessage = 'Access Denied: You need admin privileges to send notifications.';
+        } else if (response.status === 401) {
+          errorMessage = 'Unauthorized: Please log in again.';
+        }
+        
+        throw new Error(errorMessage);
+      }
+
+      setHistory((prev) => [
+        {
+          id: Date.now(),
+          title,
+          message,
+          imagePreview,
+          sentAt: new Date().toLocaleString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric',
+            hour: '2-digit',
+            minute: '2-digit',
+          }),
+          recipientCount: isBroadcast ? 'All app users' : `${phoneNumberList.length} user(s)`,
+        },
+        ...prev,
+      ]);
+
+      setStatus('sent');
+      showToast({
+        title: '✅ Success',
+        message: 'Notification sent successfully!',
+        type: 'success',
+      });
+
+      setTimeout(() => {
+        setTitle('');
+        setMessage('');
+        removeImage();
+        setStatus(null);
+        setPhoneNumberList([]);
+      }, 1800);
+    } catch (error) {
+      console.error('Error sending notification:', error);
       setStatus(null);
-    }, 1800);
+      showToast({
+        title: '❌ Error',
+        message: error.message || 'Failed to send notification',
+        type: 'error',
+      });
+    }
   };
 
   /* style helpers */
@@ -302,14 +379,14 @@ export default function Notification() {
               background: 'var(--color-accent)',
               border: '1px solid var(--color-primary)',
               borderRadius: 'var(--radius)',
-              padding: 'var(--space-3) var(--space-4)',
+              padding: 'var(--space-4)',
               display: 'flex',
-              alignItems: 'center',
-              gap: 'var(--space-2)',
+              flexDirection: 'column',
+              gap: 'var(--space-3)',
             }}
           >
-            <span>👥</span>
-            <div>
+            <div style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)' }}>
+              <span>👥</span>
               <div
                 style={{
                   fontSize: 'var(--text-sm)',
@@ -319,10 +396,121 @@ export default function Notification() {
               >
                 Audience
               </div>
-              <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
-                All app users
-              </div>
             </div>
+
+            {/* Broadcast vs Specific Users Toggle */}
+            <div style={{ display: 'flex', gap: 'var(--space-4)', alignItems: 'center' }}>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={isBroadcast}
+                  onChange={() => {
+                    setIsBroadcast(true);
+                    setPhoneNumberList([]);
+                  }}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-fg)' }}>
+                  All app users
+                </span>
+              </label>
+              <label style={{ display: 'flex', alignItems: 'center', gap: 'var(--space-2)', cursor: 'pointer' }}>
+                <input
+                  type="radio"
+                  name="audience"
+                  checked={!isBroadcast}
+                  onChange={() => setIsBroadcast(false)}
+                  style={{ cursor: 'pointer' }}
+                />
+                <span style={{ fontSize: 'var(--text-sm)', color: 'var(--color-fg)' }}>
+                  Specific users
+                </span>
+              </label>
+            </div>
+
+            {/* Specific Users Phone Number Input */}
+            {!isBroadcast && (
+              <div style={{ display: 'flex', flexDirection: 'column', gap: 'var(--space-2)' }}>
+                <div style={{ display: 'flex', gap: 'var(--space-2)' }}>
+                  <input
+                    type="tel"
+                    placeholder="Enter phone number (e.g., 7306969819)"
+                    value={currentPhoneInput}
+                    onChange={(e) => setCurrentPhoneInput(e.target.value)}
+                    onKeyPress={(e) => e.key === 'Enter' && handleAddPhoneNumber()}
+                    style={{
+                      flex: 1,
+                      padding: '8px 12px',
+                      borderRadius: 'var(--radius)',
+                      border: '1px solid var(--color-border)',
+                      fontSize: 'var(--text-sm)',
+                      background: 'var(--color-bg)',
+                      color: 'var(--color-fg)',
+                    }}
+                  />
+                  <button
+                    onClick={handleAddPhoneNumber}
+                    style={{
+                      padding: '8px 16px',
+                      borderRadius: 'var(--radius)',
+                      border: 'none',
+                      background: 'var(--color-primary)',
+                      color: '#fff',
+                      cursor: 'pointer',
+                      fontSize: 'var(--text-sm)',
+                      fontWeight: 'var(--weight-semibold)',
+                    }}
+                  >
+                    Add
+                  </button>
+                </div>
+
+                {/* Phone Numbers List */}
+                {phoneNumberList.length > 0 && (
+                  <div style={{ display: 'flex', flexWrap: 'wrap', gap: 'var(--space-2)' }}>
+                    {phoneNumberList.map((phone) => (
+                      <div
+                        key={phone}
+                        style={{
+                          display: 'flex',
+                          alignItems: 'center',
+                          gap: 'var(--space-1)',
+                          padding: '4px 12px',
+                          background: 'var(--color-primary)',
+                          color: '#fff',
+                          borderRadius: 'var(--radius-full)',
+                          fontSize: 'var(--text-xs)',
+                        }}
+                      >
+                        <span>{phone}</span>
+                        <button
+                          onClick={() => handleRemovePhoneNumber(phone)}
+                          style={{
+                            background: 'none',
+                            border: 'none',
+                            color: '#fff',
+                            cursor: 'pointer',
+                            fontSize: '14px',
+                            padding: '0',
+                            display: 'flex',
+                            alignItems: 'center',
+                          }}
+                        >
+                          ✕
+                        </button>
+                      </div>
+                    ))}
+                  </div>
+                )}
+
+                {!isBroadcast && phoneNumberList.length === 0 && (
+                  <div style={{ fontSize: 'var(--text-xs)', color: 'var(--color-muted-fg)' }}>
+                    Add at least one phone number to send to specific users
+                  </div>
+                )}
+              </div>
+            )}
           </div>
 
           {/* Action Buttons */}
@@ -343,7 +531,7 @@ export default function Notification() {
               className="btn btn-primary btn-lg"
               style={{ flex: 1 }}
               onClick={handleSend}
-              disabled={!isValid || !!status}
+              disabled={!isValid || !!status || (!isBroadcast && phoneNumberList.length === 0)}
             >
               {status === 'sending' ? (
                 <>

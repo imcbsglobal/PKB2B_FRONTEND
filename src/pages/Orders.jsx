@@ -10,10 +10,14 @@ import { useFetchData } from '../hooks/useFetchData';
 import { usePagination } from '../hooks/usePagination';
 import { dataCache } from '../utils/cache';
 
-const FILTERS = [
+const TYPE_FILTERS = [
   { id: 'All', label: 'All' },
   { id: 'Offer', label: 'Offer' },
-  { id: 'Without Offer', label: 'Without Offer' },
+  { id: 'Normal', label: 'Normal' },
+];
+
+const STATUS_FILTERS = [
+  { id: 'AllStatus', label: 'All Status' },
   { id: 'Pending', label: 'Pending' },
   { id: 'Accepted', label: 'Accepted' },
   { id: 'Invoiced', label: 'Invoiced' },
@@ -291,7 +295,8 @@ function generatePageSizeOptions(total) {
 }
 
 export default function   Orders({ showToast }) {
-  const [filter, setFilter] = useState('All');
+  const [typeFilter, setTypeFilter] = useState('All');
+  const [statusFilter, setStatusFilter] = useState('AllStatus');
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);
@@ -299,7 +304,8 @@ export default function   Orders({ showToast }) {
   const [dateFrom, setDateFrom] = useState(getTodayDate());
   const [dateTo, setDateTo] = useState(getTodayDate());
   const [itemsPerPage, setItemsPerPage] = useState(10);
-  const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [typeFilterDropdownOpen, setTypeFilterDropdownOpen] = useState(false);
+  const [statusFilterDropdownOpen, setStatusFilterDropdownOpen] = useState(false);
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
@@ -467,14 +473,22 @@ export default function   Orders({ showToast }) {
     return displayOrders.filter((order) => {
       const status = (order.status || '').toLowerCase().trim();
       const offerBucket = order.row_offer_bucket || 'without-offer';
-      const matchesFilter =
-        filter === 'All' ||
-        (filter === 'Offer' && offerBucket === 'offer') ||
-        (filter === 'Without Offer' && offerBucket !== 'offer') ||
-        (filter === 'Pending' && status === 'pending') ||
-        (filter === 'Accepted' && status === 'accepted') ||
-        (filter === 'Invoiced' && status === 'invoiced') ||
-        (filter === 'Dispatched' && status === 'dispatched');
+      
+      // TYPE filter logic
+      const matchesTypeFilter =
+        typeFilter === 'All' ||
+        (typeFilter === 'Offer' && offerBucket === 'offer') ||
+        (typeFilter === 'Normal' && offerBucket !== 'offer');
+      
+      // STATUS filter logic
+      const matchesStatusFilter =
+        statusFilter === 'AllStatus' ||
+        (statusFilter === 'Pending' && status === 'pending') ||
+        (statusFilter === 'Accepted' && status === 'accepted') ||
+        (statusFilter === 'Invoiced' && status === 'invoiced') ||
+        (statusFilter === 'Dispatched' && status === 'dispatched');
+      
+      const matchesFilter = matchesTypeFilter && matchesStatusFilter;
 
 
       // Date filtering
@@ -515,7 +529,7 @@ export default function   Orders({ showToast }) {
 
       return matchesFilter && matchesSearch && matchesDate;
     });
-  }, [displayOrders, search, filter, dateFrom, dateTo]);
+  }, [displayOrders, search, typeFilter, statusFilter, dateFrom, dateTo]);
 
   const {
     currentPage,
@@ -583,34 +597,30 @@ export default function   Orders({ showToast }) {
             <button 
               type="button" 
               className="order-filter-dropdown__button"
-              onClick={() => setFilterDropdownOpen(!filterDropdownOpen)}
-              aria-expanded={filterDropdownOpen}
+              onClick={() => setTypeFilterDropdownOpen(!typeFilterDropdownOpen)}
+              aria-expanded={typeFilterDropdownOpen}
             >
-              Filter: {FILTERS.find(f => f.id === filter)?.label}
+              Type: {TYPE_FILTERS.find(f => f.id === typeFilter)?.label}
               <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
                 <polyline points="6 9 12 15 18 9"></polyline>
               </svg>
             </button>
-            {filterDropdownOpen && (
+            {typeFilterDropdownOpen && (
               <div className="order-filter-dropdown__menu">
-                {FILTERS.map((item) => {
+                {TYPE_FILTERS.map((item) => {
                   let count = 0;
                   if (item.id === 'All') count = counts.all;
                   else if (item.id === 'Offer') count = counts.offer;
-                  else if (item.id === 'Without Offer') count = counts.withoutOffer;
-                  else if (item.id === 'Pending') count = counts.pending;
-                  else if (item.id === 'Accepted') count = counts.accepted;
-                  else if (item.id === 'Invoiced') count = counts.invoiced;
-                  else if (item.id === 'Dispatched') count = counts.dispatched;
+                  else if (item.id === 'Normal') count = counts.withoutOffer;
 
                   return (
                     <button
                       key={item.id}
                       type="button"
-                      className={`order-filter-dropdown__item ${filter === item.id ? 'order-filter-dropdown__item--active' : ''}`}
+                      className={`order-filter-dropdown__item ${typeFilter === item.id ? 'order-filter-dropdown__item--active' : ''}`}
                       onClick={() => {
-                        setFilter(item.id);
-                        setFilterDropdownOpen(false);
+                        setTypeFilter(item.id);
+                        setTypeFilterDropdownOpen(false);
                       }}
                     >
                       <span>{item.label}</span>
@@ -622,7 +632,46 @@ export default function   Orders({ showToast }) {
             )}
           </div>
 
-          
+          <div className="order-filter-dropdown">
+            <button 
+              type="button" 
+              className="order-filter-dropdown__button"
+              onClick={() => setStatusFilterDropdownOpen(!statusFilterDropdownOpen)}
+              aria-expanded={statusFilterDropdownOpen}
+            >
+              Status: {STATUS_FILTERS.find(f => f.id === statusFilter)?.label}
+              <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" style={{ marginLeft: '8px', transition: 'transform 0.2s' }}>
+                <polyline points="6 9 12 15 18 9"></polyline>
+              </svg>
+            </button>
+            {statusFilterDropdownOpen && (
+              <div className="order-filter-dropdown__menu">
+                {STATUS_FILTERS.map((item) => {
+                  let count = 0;
+                  if (item.id === 'AllStatus') count = counts.all;
+                  else if (item.id === 'Pending') count = counts.pending;
+                  else if (item.id === 'Accepted') count = counts.accepted;
+                  else if (item.id === 'Invoiced') count = counts.invoiced;
+                  else if (item.id === 'Dispatched') count = counts.dispatched;
+
+                  return (
+                    <button
+                      key={item.id}
+                      type="button"
+                      className={`order-filter-dropdown__item ${statusFilter === item.id ? 'order-filter-dropdown__item--active' : ''}`}
+                      onClick={() => {
+                        setStatusFilter(item.id);
+                        setStatusFilterDropdownOpen(false);
+                      }}
+                    >
+                      <span>{item.label}</span>
+                      <span className="order-filter-dropdown__count">{count}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
 
           <div className="orders-rowcount-mini">
             <select 
@@ -824,18 +873,31 @@ export default function   Orders({ showToast }) {
                     <th>ITEM NAME</th>
                     <th>QTY</th>
                     <th>RATE</th>
+                    <th>TOTAL</th>
                   </tr>
                 </thead>
                 <tbody>
-                  {orderItems.map((item, idx) => (
-                    <tr key={idx}>
-                      <td>{item.item_code || '—'}</td>
-                      <td><OrderCell title={item.item_name || '—'} sub={item.barcode || '—'} /></td>
-                      <td>{item.quantity ?? 0}</td>
-                      <td>₹ {Number(item.rate || 0).toLocaleString('en-IN')}</td>
-                    </tr>
-                  ))}
+                  {orderItems.map((item, idx) => {
+                    const itemTotal = (item.quantity ?? 0) * (item.rate ?? 0);
+                    return (
+                      <tr key={idx}>
+                        <td>{item.item_code || '—'}</td>
+                        <td><OrderCell title={item.item_name || '—'} sub={item.barcode || '—'} /></td>
+                        <td>{item.quantity ?? 0}</td>
+                        <td>₹ {Number(item.rate || 0).toLocaleString('en-IN')}</td>
+                        <td>₹ {Number(itemTotal).toLocaleString('en-IN')}</td>
+                      </tr>
+                    );
+                  })}
                 </tbody>
+                <tfoot>
+                  <tr className="orders-modal-table-footer">
+                    <td colSpan="4" className="orders-modal-table-footer-label">GRAND TOTAL</td>
+                    <td className="orders-modal-table-footer-total">
+                      ₹ {Number(orderItems.reduce((sum, item) => sum + ((item.quantity ?? 0) * (item.rate ?? 0)), 0)).toLocaleString('en-IN')}
+                    </td>
+                  </tr>
+                </tfoot>
               </table>
             </div>
           </div>
@@ -1409,31 +1471,33 @@ export default function   Orders({ showToast }) {
 
         .orders-modal-table th:nth-child(1),
         .orders-modal-table td:nth-child(1) {
-          width: 14%;
+          width: 12%;
         }
 
         .orders-modal-table th:nth-child(2),
         .orders-modal-table td:nth-child(2) {
-          width: 42%;
+          width: 38%;
         }
 
         .orders-modal-table th:nth-child(3),
         .orders-modal-table td:nth-child(3) {
-          width: 14%;
-          text-align: center;
+          width: 12%;
+          text-align: right;
         }
 
         .orders-modal-table th:nth-child(4),
         .orders-modal-table td:nth-child(4) {
-          width: 10%;
-          text-align: center;
+          width: 12%;
+          text-align: right;
+          white-space: nowrap;
         }
 
         .orders-modal-table th:nth-child(5),
         .orders-modal-table td:nth-child(5) {
-          width: 20%;
+          width: 16%;
           text-align: right;
           white-space: nowrap;
+          font-weight: var(--weight-semibold);
         }
 
         .orders-modal-table td:nth-child(2) {
@@ -1453,6 +1517,26 @@ export default function   Orders({ showToast }) {
 
         .orders-modal-table tbody tr:hover {
           background: rgba(0, 0, 0, 0.015);
+        }
+
+        .orders-modal-table-footer {
+          background: rgba(0, 0, 0, 0.03);
+          font-weight: var(--weight-semibold);
+          border-top: 2px solid var(--color-border);
+        }
+
+        .orders-modal-table-footer-label {
+          text-align: right;
+          padding: 0.75rem !important;
+          color: var(--color-fg);
+          font-weight: var(--weight-semibold);
+        }
+
+        .orders-modal-table-footer-total {
+          padding: 0.75rem !important;
+          color: var(--color-primary);
+          font-weight: var(--weight-bold);
+          font-size: var(--text-base);
         }
 
         .orders-page {
