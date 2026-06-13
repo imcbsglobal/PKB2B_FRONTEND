@@ -1,10 +1,13 @@
-import React, { useMemo, useState } from 'react';
+import { useMemo, useState } from 'react';
 
 import Input from '../components/Input';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
+import Pagination from '../components/Pagination';
 import { customerAPI } from '../Services/api';
 import { useFetchData } from '../hooks/useFetchData';
+
+const ITEMS_PER_PAGE = 20;
 
 function CustomerTable({ rows }) {
   return (
@@ -45,6 +48,7 @@ function CustomerTable({ rows }) {
 
 export default function Customers() {
   const [search, setSearch] = useState('');
+  const [currentPage, setCurrentPage] = useState(1);
 
   const customersResult = useFetchData('customers', () => customerAPI.getCustomers());
   const customers = Array.isArray(customersResult.data) ? customersResult.data : [];
@@ -70,10 +74,22 @@ export default function Customers() {
     });
   }, [filteredCustomers]);
 
+  // Reset to page 1 whenever the search changes
+  const handleSearch = (e) => {
+    setSearch(e.target.value);
+    setCurrentPage(1);
+  };
+
+  // Slice the sorted list to the current page
+  const paginatedCustomers = useMemo(() => {
+    const start = (currentPage - 1) * ITEMS_PER_PAGE;
+    return sortedCustomers.slice(start, start + ITEMS_PER_PAGE);
+  }, [sortedCustomers, currentPage]);
+
   return (
     <div className="page customer-page">
       <div className="customer-toolbar">
-        <Input className="customer-toolbar__search" placeholder="Search by name, code, GSTIN..." value={search} onChange={(e) => setSearch(e.target.value)} />
+        <Input className="customer-toolbar__search" placeholder="Search by name, code, GSTIN..." value={search} onChange={handleSearch} />
       </div>
 
       {loading ? (
@@ -83,7 +99,15 @@ export default function Customers() {
       ) : sortedCustomers.length === 0 ? (
         <EmptyState icon="👥" title="No customers found" description={search ? `No customers matching "${search}"` : 'No customers available'} />
       ) : (
-        <CustomerTable rows={sortedCustomers} />
+        <>
+          <CustomerTable rows={paginatedCustomers} />
+          <Pagination
+            currentPage={currentPage}
+            totalItems={sortedCustomers.length}
+            itemsPerPage={ITEMS_PER_PAGE}
+            onPageChange={setCurrentPage}
+          />
+        </>
       )}
     </div>
   );
