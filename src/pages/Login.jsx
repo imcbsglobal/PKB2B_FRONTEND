@@ -217,7 +217,7 @@ export default function Login({ onLogin }) {
                     alignItems: 'center',
                     lineHeight: 1,
                   }}
-                >j
+                >
                   {showPass ? <EyeOffIcon /> : <EyeIcon />}
                 </button>
               </div>
