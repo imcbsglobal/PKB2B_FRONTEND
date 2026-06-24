@@ -1,0 +1,27 @@
+{
+  "appId": "com.peekay.b2b.orders",
+  "productName": "PK B2B Orders",
+  "directories": {
+    "output": "dist",
+    "buildResources": "public"
+  },
+  "files": [
+    "dist/**/*",
+    "electron/**/*",
+    "public/**/*",
+    "package.json"
+  ],
+  "win": {
+    "target": "nsis",
+    "icon": "public/pk.png"
+  },
+  "nsis": {
+    "oneClick": false,
+    "allowToChangeInstallationDirectory": true,
+    "createDesktopShortcut": true,
+    "createStartMenuShortcut": true
+  },
+  "extraMetadata": {
+    "main": "electron/main.cjs"
+  }
+}

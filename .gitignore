@@ -22,3 +22,11 @@ dist-ssr
 *.njsproj
 *.sln
 *.sw?
+
+# Electron build output
+dist/
+build/
+release/
+
+# Keep sound file (add your own sound)
+!public/sounds/new-order.mp3

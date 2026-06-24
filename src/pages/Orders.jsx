@@ -1,4 +1,4 @@
-import React, { useMemo, useState } from 'react';
+import React, { useMemo, useState, useEffect } from 'react';
 
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import EmptyState from '../components/EmptyState';
@@ -8,6 +8,7 @@ import Badge from '../components/Badge';
 import { orderAPI } from '../Services/api';
 import { useFetchData } from '../hooks/useFetchData';
 import { usePagination } from '../hooks/usePagination';
+import { useOrderNotification } from '../hooks/useOrderNotification';
 import { dataCache } from '../utils/cache';
 
 const TYPE_FILTERS = [
@@ -311,6 +312,18 @@ export default function   Orders({ showToast }) {
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
   const loading = ordersResult.loading;
 
+  // Initialize order notification system
+  const { startPolling, stopPolling } = useOrderNotification(orders, showToast);
+
+  // Start polling when component mounts - every 30 seconds
+  useEffect(() => {
+    startPolling(refreshOrders, 30000); // Poll every 30 seconds
+    
+    return () => {
+      stopPolling();
+    };
+  }, [startPolling, stopPolling]);
+
   const displayOrders = useMemo(() => {
     return orders.flatMap((order) => splitOrderForDisplay(order));
   }, [orders]);
@@ -495,11 +508,16 @@ export default function   Orders({ showToast }) {
       let matchesDate = true;
       if (dateFrom || dateTo) {
         const orderDate = new Date(order.created_at);
+        
         if (dateFrom) {
+          // Create start of day in local timezone
           const fromDate = new Date(dateFrom);
+          fromDate.setHours(0, 0, 0, 0);
           matchesDate = matchesDate && orderDate >= fromDate;
         }
+        
         if (dateTo) {
+          // Create end of day in local timezone
           const toDate = new Date(dateTo);
           toDate.setHours(23, 59, 59, 999);
           matchesDate = matchesDate && orderDate <= toDate;
