@@ -122,6 +122,52 @@ ipcMain.handle('show-notification', async (event, { title, body }) => {
   }
 });
 
+// Handle IPC for playing notification sound
+ipcMain.handle('play-sound', async () => {
+  try {
+    // Get the correct path to the sound file
+    const soundPath = isDev
+      ? path.join(__dirname, '../public/sounds/new-order.mp3')
+      : path.join(process.resourcesPath, 'public/sounds/new-order.mp3');
+
+    // Check if file exists
+    const fs = require('fs');
+    if (!fs.existsSync(soundPath)) {
+      console.error('Sound file not found at:', soundPath);
+      return { success: false, error: 'Sound file not found' };
+    }
+
+    // Use native audio playback (requires powershell on Windows)
+    if (process.platform === 'win32') {
+      const { exec } = require('child_process');
+      
+      // Play sound using PowerShell (native Windows method)
+      const command = `powershell -c "(New-Object Media.SoundPlayer '${soundPath}').PlaySync();"`;
+      
+      exec(command, (error) => {
+        if (error) {
+          console.error('Error playing sound:', error);
+        }
+      });
+
+      return { success: true };
+    }
+
+    return { success: false, error: 'Unsupported platform' };
+  } catch (error) {
+    console.error('Failed to play sound:', error);
+    return { success: false, error: error.message };
+  }
+});
+
+// Handle sync IPC for getting sound path
+ipcMain.on('get-sound-path', (event) => {
+  const soundPath = isDev
+    ? path.join(__dirname, '../public/sounds/new-order.mp3')
+    : path.join(process.resourcesPath, 'public/sounds/new-order.mp3');
+  event.returnValue = soundPath;
+});
+
 // App lifecycle
 app.whenReady().then(() => {
   createWindow();

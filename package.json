@@ -52,6 +52,12 @@
       "public/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "public/sounds",
+        "to": "public/sounds"
+      }
+    ],
     "extraMetadata": {
       "main": "electron/main.cjs"
     },
