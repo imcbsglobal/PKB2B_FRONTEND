@@ -313,7 +313,7 @@ export default function   Orders({ showToast }) {
   const loading = ordersResult.loading;
 
   // Initialize order notification system
-  const { startPolling, stopPolling } = useOrderNotification(orders, showToast);
+  const { startPolling, stopPolling, stopAlert, toggleMute, isMuted, isAlerting } = useOrderNotification(orders, showToast);
 
   // Start polling when component mounts - every 30 seconds
   useEffect(() => {
@@ -402,10 +402,21 @@ export default function   Orders({ showToast }) {
       const response = await orderAPI.acceptOrder(orderId);
       // Update cached orders locally with the response data from API
       const cached = dataCache.get('orders') || orders;
+      const acceptedStatus = response?.data?.status || 'accepted'; // fallback to 'accepted'
       const updated = Array.isArray(cached)
-        ? cached.map(o => (o.order_id === orderId ? { ...o, status: response.data.status } : o))
+        ? cached.map(o => (o.order_id === orderId ? { ...o, status: acceptedStatus } : o))
         : cached;
       dataCache.set('orders', updated);
+
+      // ── Stop sound IMMEDIATELY — before setRefreshKey, before anything ──
+      // 'updated' already has this order as accepted, so count remaining pending
+      const stillPending = updated.filter(
+        (o) => (o.status || '').toLowerCase().trim() === 'pending'
+      );
+      if (stillPending.length === 0) {
+        stopAlert(); // Instant — no page refresh needed
+      }
+
       setRefreshKey(v => v + 1);
       showToast?.('Order accepted successfully!', 'success');
     } catch (error) {
@@ -607,7 +618,55 @@ export default function   Orders({ showToast }) {
           <h1 className="page__title">Orders</h1>
           <p className="page__sub">{filtered.length} order{filtered.length !== 1 ? 's' : ''} found • Total: {totalItems} rows</p>
         </div>
+
+        {/* Silent / Alert button */}
+        <button
+          onClick={toggleMute}
+          title={isMuted ? 'Sound is muted — click to unmute' : isAlerting ? 'Alert is playing — click to silence' : 'Sound alerts enabled'}
+          style={{
+            display: 'flex',
+            alignItems: 'center',
+            gap: '6px',
+            padding: '8px 14px',
+            borderRadius: '8px',
+            border: '1.5px solid',
+            borderColor: isMuted ? '#9ca3af' : isAlerting ? '#ef4444' : '#10b981',
+            background: isMuted ? '#f3f4f6' : isAlerting ? '#fef2f2' : '#f0fdf4',
+            color: isMuted ? '#6b7280' : isAlerting ? '#ef4444' : '#10b981',
+            cursor: 'pointer',
+            fontSize: '13px',
+            fontWeight: 600,
+            transition: 'all 0.2s',
+            animation: isAlerting && !isMuted ? 'pulse-border 1s infinite' : 'none',
+          }}
+        >
+          {isMuted ? (
+            // Muted icon
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <line x1="1" y1="1" x2="23" y2="23"/>
+              <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+              <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+              <line x1="12" y1="19" x2="12" y2="23"/>
+              <line x1="8" y1="23" x2="16" y2="23"/>
+            </svg>
+          ) : (
+            // Bell / sound icon
+            <svg width="16" height="16" viewBox="0 0 24 24" fill={isAlerting ? '#ef4444' : 'none'} stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+              <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
+              <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
+            </svg>
+          )}
+          {isMuted ? 'Unmute' : isAlerting ? 'Silence' : 'Sound On'}
+        </button>
       </div>
+
+      {/* Pulsing style for active alert */}
+      <style>{`
+        @keyframes pulse-border {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239,68,68,0.4); }
+          50%       { box-shadow: 0 0 0 6px rgba(239,68,68,0); }
+        }
+      `}</style>
 
       <div className="orders-card">
         <div className="orders-toolbar">

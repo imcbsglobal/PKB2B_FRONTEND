@@ -18,6 +18,10 @@ const Banner             = lazy(() => import('./pages/Banner'));
 const Banneradd          = lazy(() => import('./pages/Banneradd'));
 const Login              = lazy(() => import('./pages/Login'));
 
+
+
+
+
 const PAGES = {
   dashboard:           Dashboard,
   categories:          Categories,

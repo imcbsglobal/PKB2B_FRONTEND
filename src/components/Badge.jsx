@@ -11,6 +11,9 @@ export default function Badge({
 }) {
   const sizeClass = size === 'sm' ? 'badge-sm' : size === 'lg' ? 'badge-lg' : '';
   
+
+
+  
   return (
     <span className={`badge badge-${variant} ${sizeClass} ${className}`}>
       {children}

@@ -1,5 +1,6 @@
 import React from 'react';
-import pkLogo from '../assets/pk.png';
+
+import pkLogo from '../assets/pk.png'  ;
 
 const NAV_SECTIONS = [
   {

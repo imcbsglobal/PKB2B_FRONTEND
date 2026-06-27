@@ -12,6 +12,21 @@ contextBridge.exposeInMainWorld('electron', {
     }
   },
 
+  // Play notification sound via main process (works in packaged .exe)
+  playSound: async () => {
+    try {
+      return await ipcRenderer.invoke('play-sound');
+    } catch (error) {
+      console.error('Failed to play sound:', error);
+      return { success: false, error: error.message };
+    }
+  },
+
+  // Get the correct path to the sound file (for packaged app)
+  getSoundPath: () => {
+    return ipcRenderer.sendSync('get-sound-path');
+  },
+
   // Check if running in Electron
   isElectron: true,
 

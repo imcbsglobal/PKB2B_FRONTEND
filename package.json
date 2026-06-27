@@ -52,12 +52,22 @@
       "public/**/*",
       "package.json"
     ],
+    "extraResources": [
+      {
+        "from": "public/sounds",
+        "to": "public/sounds"
+      }
+    ],
     "extraMetadata": {
       "main": "electron/main.cjs"
     },
     "win": {
       "target": "nsis",
-      "icon": "public/pk.png"
+      "icon": "public/pk.png",
+      "signtoolOptions": {
+        "certificateFile": "peekay-cert.pfx",
+        "certificatePassword": "Peekay@2024!"
+      }
     },
     "nsis": {
       "oneClick": false,
