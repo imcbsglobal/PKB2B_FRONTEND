@@ -38,35 +38,12 @@ function OrdersApp() {
   // If logged in, show Orders page with logout button
   return (
     <div className="app" style={{ padding: 0, margin: 0 }}>
-      {/* Logout button in top-right */}
-      <div style={{
-        position: 'fixed',
-        top: '10px',
-        right: '10px',
-        zIndex: 10000,
-      }}>
-        <button
-          onClick={() => {
-            authAPI.logout();
-            setUser(null);
-            showToast('Logged out successfully', 'info');
-          }}
-          style={{
-            padding: '8px 16px',
-            background: '#f44336',
-            color: 'white',
-            border: 'none',
-            borderRadius: '4px',
-            cursor: 'pointer',
-            fontSize: '14px',
-          }}
-        >
-          Logout
-        </button>
-      </div>
-
-      {/* Orders Page - Full Screen */}
-      <Orders showToast={showToast} />
+      {/* Orders Page - Full Screen (logout passed as prop) */}
+      <Orders showToast={showToast} onLogout={() => {
+        authAPI.logout();
+        setUser(null);
+        showToast('Logged out successfully', 'info');
+      }} />
 
       {/* Toast Notifications */}
       <div className="toast-container">

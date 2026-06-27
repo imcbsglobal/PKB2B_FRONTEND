@@ -17,8 +17,9 @@ function createWindow() {
       contextIsolation: true,
       nodeIntegration: false,
       enableRemoteModule: false,
+      autoplayPolicy: 'no-user-gesture-required', // ← allow audio without user click
     },
-    show: false, // Don't show until ready
+    show: false,
     title: 'PK B2B - Orders Management',
   });
 
@@ -165,7 +166,10 @@ ipcMain.on('get-sound-path', (event) => {
   const soundPath = isDev
     ? path.join(__dirname, '../public/sounds/new-order.mp3')
     : path.join(process.resourcesPath, 'public/sounds/new-order.mp3');
-  event.returnValue = soundPath;
+  
+  // Always return forward slashes so file:/// URL works
+  event.returnValue = soundPath.replace(/\\/g, '/');
+  console.log('📢 Sound path returned:', event.returnValue);
 });
 
 // App lifecycle
