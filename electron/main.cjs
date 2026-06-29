@@ -6,21 +6,31 @@ let mainWindow = null;
 let tray = null;
 
 function createWindow() {
+  // Get screen size to set window relative to display
+  const { screen } = require('electron');
+  const primaryDisplay = screen.getPrimaryDisplay();
+  const { width: screenWidth, height: screenHeight } = primaryDisplay.workAreaSize;
+
+  // Use 70% of screen width, 85% of screen height — fits on any monitor
+  const winWidth  = Math.min(960,  Math.round(screenWidth  * 0.70));
+  const winHeight = Math.min(780, Math.round(screenHeight * 0.85));
+
   mainWindow = new BrowserWindow({
-    width: 1400,
-    height: 900,
-    minWidth: 1000,
-    minHeight: 700,
+    width: winWidth,
+    height: winHeight,
+    minWidth: 800,
+    minHeight: 560,
     icon: path.join(__dirname, '../public/pk.png'),
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
       enableRemoteModule: false,
-      autoplayPolicy: 'no-user-gesture-required', // ← allow audio without user click
+      autoplayPolicy: 'no-user-gesture-required',
     },
     show: false,
     title: 'PK B2B - Orders Management',
+    center: true, // always open centered on screen
   });
 
   // Load the app

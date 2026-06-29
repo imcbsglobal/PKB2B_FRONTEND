@@ -329,7 +329,7 @@
 
 .page {
   width: 100%;
-  padding: var(--space-5) var(--space-6) var(--space-8);
+  padding: var(--space-3) var(--space-4) var(--space-5);
 }
 
 .page__header {
@@ -348,7 +348,7 @@
 }
 
 .page__title {
-  font-size: clamp(1.4rem, 2vw, 1.8rem);
+  font-size: clamp(1.1rem, 1.6vw, 1.4rem);
   font-weight: var(--weight-semibold);
   color: var(--color-fg);
   line-height: 1.2;
@@ -412,12 +412,12 @@
    ORDERS PAGE — specific overrides
    ══════════════════════════════════════════════════════════ */
 
-/* Page header row: title left, Export CSV right */
+/* Page header row: title left, buttons right */
 .orders-page-header {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  margin-bottom: var(--space-8);
+  margin-bottom: var(--space-4);
 }
 
 /* The unified white card that wraps search + filters + table */
