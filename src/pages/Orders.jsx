@@ -297,7 +297,7 @@ function generatePageSizeOptions(total) {
 
 export default function Orders({ showToast, onLogout }) {
   const [typeFilter, setTypeFilter] = useState('All');
-  const [statusFilter, setStatusFilter] = useState('AllStatus');
+  const [statusFilter, setStatusFilter] = useState('Pending');
   const [search, setSearch] = useState('');
   const [actionLoading, setActionLoading] = useState(null);
   const [refreshKey, setRefreshKey] = useState(0);

@@ -21,6 +21,7 @@ function createWindow() {
     minWidth: 800,
     minHeight: 560,
     icon: path.join(__dirname, '../public/pk.png'),
+    backgroundColor: '#f9fafb', // match app background — prevents white flash
     webPreferences: {
       preload: path.join(__dirname, 'preload.cjs'),
       contextIsolation: true,
@@ -30,7 +31,7 @@ function createWindow() {
     },
     show: false,
     title: 'PK B2B - Orders Management',
-    center: true, // always open centered on screen
+    center: true,
   });
 
   // Load the app
@@ -41,9 +42,10 @@ function createWindow() {
     mainWindow.loadFile(path.join(__dirname, '../dist/index.html'));
   }
 
-  // Show window when ready
+  // Show ONLY after page is fully painted — prevents white/blank screen
   mainWindow.once('ready-to-show', () => {
     mainWindow.show();
+    mainWindow.focus();
   });
 
   // Minimize to tray instead of closing
@@ -122,9 +124,36 @@ ipcMain.handle('show-notification', async (event, { title, body }) => {
       title: title || 'New Order',
       body: body || 'A new order has been received',
       icon: path.join(__dirname, '../public/pk.png'),
-      urgency: 'critical', // High priority notification
-      timeoutType: 'never', // Stay until dismissed
+      urgency: 'critical',
+      timeoutType: 'never',
     });
+
+    // When user clicks the notification → bring app window to front
+    notification.on('click', () => {
+      if (!mainWindow) {
+        // Window was destroyed — recreate it
+        createWindow();
+        return;
+      }
+
+      const showWindow = () => {
+        if (mainWindow.isMinimized()) mainWindow.restore();
+        if (!mainWindow.isVisible()) mainWindow.show();
+        mainWindow.focus();
+        mainWindow.setAlwaysOnTop(true);
+        mainWindow.setAlwaysOnTop(false);
+        // Force a repaint to fix white/blank screen
+        mainWindow.webContents.invalidate();
+      };
+
+      // If webContents is still loading, wait for it
+      if (mainWindow.webContents.isLoading()) {
+        mainWindow.webContents.once('did-finish-load', showWindow);
+      } else {
+        showWindow();
+      }
+    });
+
     notification.show();
     return { success: true };
   } else {
