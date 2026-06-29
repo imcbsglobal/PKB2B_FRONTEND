@@ -1784,6 +1784,22 @@
   padding: 0.4rem 0.6rem;
   border-radius: var(--radius);
   cursor: pointer;
+  font-size: var(--text-sm);
+  color: var(--color-text);
+  transition: background 0.15s, border-color 0.15s;
+}
+
+.multi-filter__button--active {
+  background: #fef3c7;
+  border-color: #f59e0b;
+  color: #92400e;
+  font-weight: 600;
+}
+
+[data-theme="dark"] .multi-filter__button--active {
+  background: #78350f;
+  border-color: #f59e0b;
+  color: #fde68a;
 }
 
 .multi-filter__panel {

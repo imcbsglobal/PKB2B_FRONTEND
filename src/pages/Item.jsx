@@ -191,6 +191,8 @@ export default function Item() {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [localItems, setLocalItems] = useState([]);
   const [filterDropdownOpen, setFilterDropdownOpen] = useState(false);
+  const [zeroPriceFilter, setZeroPriceFilter] = useState('none'); // 'none' | 'any' | 'price' | 'bmrp' | 'salesprice' | 'secondprice' | 'thirdprice' | 'fourthprice' | 'nlc1'
+  const [zeroPriceOpen, setZeroPriceOpen] = useState(false);
 
   const itemsResult = useFetchData('items', () => productBatchAPI.getAllItems());
   const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
@@ -235,9 +237,26 @@ export default function Item() {
         else acc.inStock += 1;
         if (item.product_status === 'Active') acc.active += 1;
         else if (item.product_status === 'Inactive') acc.inactive += 1;
+        // zero price counts per field
+        if (!item.price || Number(item.price) === 0) acc.zeroPrice += 1;
+        if (!item.bmrp || Number(item.bmrp) === 0) acc.zeroMrp += 1;
+        if (!item.salesprice || Number(item.salesprice) === 0) acc.zeroRetail += 1;
+        if (!item.secondprice || Number(item.secondprice) === 0) acc.zeroDealer += 1;
+        if (!item.thirdprice || Number(item.thirdprice) === 0) acc.zeroCb += 1;
+        if (!item.fourthprice || Number(item.fourthprice) === 0) acc.zeroNetRate += 1;
+        if (!item.nlc1 || Number(item.nlc1) === 0) acc.zeroPk += 1;
+        const hasAnyZero =
+          !item.price || Number(item.price) === 0 ||
+          !item.bmrp || Number(item.bmrp) === 0 ||
+          !item.salesprice || Number(item.salesprice) === 0 ||
+          !item.secondprice || Number(item.secondprice) === 0 ||
+          !item.thirdprice || Number(item.thirdprice) === 0 ||
+          !item.fourthprice || Number(item.fourthprice) === 0 ||
+          !item.nlc1 || Number(item.nlc1) === 0;
+        if (hasAnyZero) acc.zeroAny += 1;
         return acc;
       },
-      { all: 0, inStock: 0, outOfStock: 0, active: 0, inactive: 0 }
+      { all: 0, inStock: 0, outOfStock: 0, active: 0, inactive: 0, zeroAny: 0, zeroPrice: 0, zeroMrp: 0, zeroRetail: 0, zeroDealer: 0, zeroCb: 0, zeroNetRate: 0, zeroPk: 0 }
     );
   }, [localItems]);
 
@@ -251,7 +270,10 @@ export default function Item() {
         item.code?.toLowerCase().includes(term) ||
         item.brand?.toLowerCase().includes(term) ||
         item.product?.toLowerCase().includes(term) ||
-        item.barcode?.toLowerCase().includes(term);
+        item.category?.toLowerCase().includes(term) ||
+        item.barcode?.toLowerCase().includes(term) ||
+        String(item.bmrp || '').includes(term) ||
+        String(item.price || '').includes(term);
 
       const stockTone = getStockTone(item.quantity);
       const matchesStatus =
@@ -277,16 +299,34 @@ export default function Item() {
     return Array.from(set).sort();
   }, [localItems]);
 
-  // extend filteredItems with brand/category selections
+  // extend filteredItems with brand/category/zero-price selections
   const finalItems = useMemo(() => {
     return filteredItems.filter((item) => {
       if (selectedBrands.length > 0 && !selectedBrands.includes(item.brand)) return false;
       if (selectedCategories.length > 0 && !selectedCategories.includes(item.product)) return false;
+
+      // Zero price filter
+      if (zeroPriceFilter !== 'none') {
+        const isZero = (val) => !val || Number(val) === 0;
+        if (zeroPriceFilter === 'any') {
+          const anyZero =
+            isZero(item.price) || isZero(item.bmrp) || isZero(item.salesprice) ||
+            isZero(item.secondprice) || isZero(item.thirdprice) || isZero(item.fourthprice) || isZero(item.nlc1);
+          if (!anyZero) return false;
+        } else if (zeroPriceFilter === 'price' && !isZero(item.price)) return false;
+        else if (zeroPriceFilter === 'bmrp' && !isZero(item.bmrp)) return false;
+        else if (zeroPriceFilter === 'salesprice' && !isZero(item.salesprice)) return false;
+        else if (zeroPriceFilter === 'secondprice' && !isZero(item.secondprice)) return false;
+        else if (zeroPriceFilter === 'thirdprice' && !isZero(item.thirdprice)) return false;
+        else if (zeroPriceFilter === 'fourthprice' && !isZero(item.fourthprice)) return false;
+        else if (zeroPriceFilter === 'nlc1' && !isZero(item.nlc1)) return false;
+      }
+
       return true;
     });
-  }, [filteredItems, selectedBrands, selectedCategories]);
+  }, [filteredItems, selectedBrands, selectedCategories, zeroPriceFilter]);
 
-  // Paginate final items for better performance
+  // Paginate final items — pagination resets to page 1 whenever finalItems reference changes
   const pagination = usePagination(finalItems, itemsPerPage);
   const paginatedItems = pagination.currentItems;
 
@@ -378,6 +418,57 @@ export default function Item() {
                           else setSelectedCategories((s) => s.filter(x => x !== c));
                         }} />
                         <span>{c}</span>
+                      </label>
+                    ))}
+                  </div>
+                </div>
+              )}
+            </div>
+
+            {/* Zero Price Filter */}
+            <div className="multi-filter">
+              <button
+                type="button"
+                className={`multi-filter__button${zeroPriceFilter !== 'none' ? ' multi-filter__button--active' : ''}`}
+                onClick={() => setZeroPriceOpen((s) => !s)}
+                aria-expanded={zeroPriceOpen}
+                title="Filter items with zero prices"
+              >
+                ₹ Zero Price{zeroPriceFilter !== 'none' ? ' ✓' : ''}
+              </button>
+              {zeroPriceOpen && (
+                <div className="multi-filter__panel" style={{ minWidth: '200px' }}>
+                  <div style={{ padding: '6px 8px 4px', fontSize: '11px', fontWeight: '600', color: 'var(--color-text-secondary, #6b7280)', textTransform: 'uppercase', letterSpacing: '0.05em' }}>
+                    Show items where price is ₹0
+                  </div>
+                  <div className="multi-filter__list">
+                    {[
+                      { id: 'none',        label: 'Off (show all)',       count: counts.all },
+                      { id: 'any',         label: 'Any price is zero',    count: counts.zeroAny },
+                      { id: 'price',       label: 'Price = 0',            count: counts.zeroPrice },
+                      { id: 'bmrp',        label: 'MRP = 0',              count: counts.zeroMrp },
+                      { id: 'salesprice',  label: 'Retail = 0',           count: counts.zeroRetail },
+                      { id: 'secondprice', label: 'Dealer Price = 0',     count: counts.zeroDealer },
+                      { id: 'thirdprice',  label: 'CB Price = 0',         count: counts.zeroCb },
+                      { id: 'fourthprice', label: 'Net Rate = 0',         count: counts.zeroNetRate },
+                      { id: 'nlc1',        label: 'PK Price = 0',         count: counts.zeroPk },
+                    ].map(({ id, label, count }) => (
+                      <label
+                        key={id}
+                        className={`multi-filter__option${zeroPriceFilter === id ? ' multi-filter__option--selected' : ''}`}
+                        style={{ cursor: 'pointer' }}
+                      >
+                        <input
+                          type="radio"
+                          name="zero-price-filter"
+                          checked={zeroPriceFilter === id}
+                          onChange={() => {
+                            setZeroPriceFilter(id);
+                            setZeroPriceOpen(false);
+                          }}
+                        />
+                        <span style={{ flex: 1 }}>{label}</span>
+                        <span className="status-filter-dropdown__count">{count}</span>
                       </label>
                     ))}
                   </div>

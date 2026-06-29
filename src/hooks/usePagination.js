@@ -1,14 +1,18 @@
-import { useState, useMemo, useEffect } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 
 export function usePagination(items = [], itemsPerPage = 10) {
   const [currentPage, setCurrentPage] = useState(1);
 
   const totalPages = Math.ceil(items.length / itemsPerPage);
 
-  // Reset to page 1 whenever the filtered list changes (e.g. after a search)
+  // Reset to page 1 whenever the filtered list actually changes (items reference or length)
+  const prevItemsRef = useRef(items);
   useEffect(() => {
-    setCurrentPage(1);
-  }, [items.length]);
+    if (prevItemsRef.current !== items) {
+      prevItemsRef.current = items;
+      setCurrentPage(1);
+    }
+  }, [items]);
 
   const currentItems = useMemo(() => {
     const start = (currentPage - 1) * itemsPerPage;
