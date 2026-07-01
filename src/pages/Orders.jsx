@@ -307,22 +307,51 @@ export default function Orders({ showToast, onLogout }) {
   const [itemsPerPage, setItemsPerPage] = useState(10);
   const [typeFilterDropdownOpen, setTypeFilterDropdownOpen] = useState(false);
   const [statusFilterDropdownOpen, setStatusFilterDropdownOpen] = useState(false);
+  // Track which pending orders the user has acknowledged (clicked the alert icon)
+  // Persisted in localStorage so the checkmark survives page refreshes
+  const [acknowledgedOrders, setAcknowledgedOrders] = useState(() => {
+    try {
+      const stored = localStorage.getItem('acknowledgedOrders');
+      return stored ? new Set(JSON.parse(stored)) : new Set();
+    } catch {
+      return new Set();
+    }
+  });
 
   const ordersResult = useFetchData('orders', () => orderAPI.getOrders(), [refreshKey]);
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
   const loading = ordersResult.loading;
 
   // Initialize order notification system
-  const { startPolling, stopPolling, stopAlert, toggleMute, isMuted, isAlerting, needsClick } = useOrderNotification(orders, showToast);
+  const {
+    startPolling, stopPolling,
+    stopAlert,
+    toggleMute, isMuted, isAlerting,
+    needsClick,
+  } = useOrderNotification(orders, showToast);
 
   // Start polling when component mounts - every 30 seconds
   useEffect(() => {
-    startPolling(refreshOrders, 30000); // Poll every 30 seconds
-    
-    return () => {
-      stopPolling();
-    };
+    startPolling(refreshOrders, 30000);
+    return () => { stopPolling(); };
   }, [startPolling, stopPolling]);
+
+  // Prune stale acknowledged IDs — keep only those that are still actual order IDs
+  // This prevents localStorage from growing unbounded over time
+  useEffect(() => {
+    if (orders.length === 0) return;
+    const allOrderIds = new Set(orders.map((o) => o.order_id));
+    setAcknowledgedOrders((prev) => {
+      const pruned = new Set([...prev].filter((id) => allOrderIds.has(id)));
+      if (pruned.size !== prev.size) {
+        try {
+          localStorage.setItem('acknowledgedOrders', JSON.stringify([...pruned]));
+        } catch {}
+        return pruned;
+      }
+      return prev;
+    });
+  }, [orders]);
 
   const displayOrders = useMemo(() => {
     return orders.flatMap((order) => splitOrderForDisplay(order));
@@ -348,6 +377,26 @@ export default function Orders({ showToast, onLogout }) {
   const refreshOrders = () => {
     dataCache.clear('orders');
     setRefreshKey((value) => value + 1);
+  };
+
+  // Called when user clicks the pulsing alert icon — removes alert + stops sound if all done
+  const acknowledgeOrder = (orderId) => {
+    setAcknowledgedOrders((prev) => {
+      const next = new Set(prev);
+      next.add(orderId);
+      // Persist to localStorage so it survives page refresh
+      try {
+        localStorage.setItem('acknowledgedOrders', JSON.stringify([...next]));
+      } catch {}
+      // Stop sound if ALL pending orders are now acknowledged
+      const allPendingAcknowledged = orders
+        .filter((o) => (o.status || '').toLowerCase().trim() === 'pending')
+        .every((o) => next.has(o.order_id));
+      if (allPendingAcknowledged) {
+        stopAlert();
+      }
+      return next;
+    });
   };  
 
   const exportToExcel = () => {
@@ -615,7 +664,7 @@ export default function Orders({ showToast, onLogout }) {
     <div className="page orders-page">
       <div className="orders-page-header">
         <div>
-          <h1 className="page__title">Orders</h1>
+          <h1 className="page__title">Ordersssss</h1>
           <p className="page__sub">{filtered.length} order{filtered.length !== 1 ? 's' : ''} found • Total: {totalItems} rows</p>
         </div>
 
@@ -886,6 +935,7 @@ export default function Orders({ showToast, onLogout }) {
             <div className="orders-table-scroll">
               <table className="orders-table">
                 <thead className="orders-table-head-sticky">
+                  {/* v2 - ALERT column added */}
                   <tr>
                     <th>ORDER ID</th>
                     <th>DATE</th>
@@ -894,25 +944,15 @@ export default function Orders({ showToast, onLogout }) {
                     <th>NUMBER</th>
                     <th>ITEM</th>
                     <th>TYPE</th>
-                    <th>STATUS</th>
+                    <th>STATU</th>
+                    <th style={{ textAlign: 'center', minWidth: '60px', width: '60px', padding: '1rem 0.5rem' }}>ALERT</th>
                   </tr>
                 </thead>
                 <tbody>
                   {currentItems.map((row) => {
                     const status = (row.status || '').toLowerCase().trim();
-                    const actionValue =
-                      status === 'accepted' ? 'accepted' :
-                      status === 'invoiced' ? 'invoiced' :
-                      status === 'dispatched' ? 'dispatched' :
-                      'pending';
-                    const actionSelectClass =
-                      actionValue === 'accepted'
-                        ? 'orders-action-select--accepted'
-                        : actionValue === 'invoiced'
-                          ? 'orders-action-select--invoiced'
-                          : actionValue === 'dispatched'
-                            ? 'orders-action-select--dispatched'
-                            : 'orders-action-select--pending';
+                    const isPending = status === 'pending';
+                    const isAcknowledged = acknowledgedOrders.has(row.order_id);
 
                     return (
                       <tr key={row.row_key || row.order_id}>
@@ -956,19 +996,44 @@ export default function Orders({ showToast, onLogout }) {
                         </td>
                         <td className="orders-table__action">
                           <div className="orders-actions">
-                            <select
-                              className={`orders-action-select ${actionSelectClass}`}
-                              value={actionValue}
-                              onChange={(e) => handleStatusChange(row.order_id, row.status, e.target.value)}
-                              disabled={actionLoading === row.order_id}
-                              title="Update order status"
-                            >
-                              <option value="pending">Pending</option>
-                              <option value="accepted">Accept</option>
-                              <option value="invoiced">Invoice</option>
-                              <option value="dispatched">Dispatch</option>
-                            </select>
+                            <span className={`orders-status-badge orders-status-badge--${status}`}>
+                              {status === 'pending' ? 'Pending'
+                                : status === 'accepted' ? 'Accepted'
+                                : status === 'invoiced' ? 'Invoiced'
+                                : status === 'dispatched' ? 'Dispatched'
+                                : (row.status || '—')}
+                            </span>
                           </div>
+                        </td>
+
+                        {/* ── ALERT column ── */}
+                        <td style={{ textAlign: 'center', width: '60px', padding: '1rem 0.5rem' }}>
+                          {isPending && !isAcknowledged ? (
+                            // ALL pending orders show pulsing icon until clicked
+                            <button
+                              onClick={() => acknowledgeOrder(row.order_id)}
+                              className="alert-order-btn alert-order-btn--new"
+                              title="Pending order — click to acknowledge"
+                            >
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="1.8" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M16.5 9.4l-9-5.19"/>
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="3.27 6.96 12 12.01 20.73 6.96"/>
+                                <line x1="12" y1="22.08" x2="12" y2="12"/>
+                              </svg>
+                            </button>
+                          ) : isPending && isAcknowledged ? (
+                            // After clicking — green received checkmark
+                            <span className="alert-order-btn alert-order-btn--received" title="Acknowledged">
+                              <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
+                                <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z"/>
+                                <polyline points="9 12 11 14 15 10"/>
+                              </svg>
+                            </span>
+                          ) : (
+                            // Non-pending orders — no alert
+                            <span style={{ color: '#d1d5db' }}>—</span>
+                          )}
                         </td>
                       </tr>
                     );
@@ -1344,17 +1409,26 @@ export default function Orders({ showToast, onLogout }) {
         .orders-table td:nth-child(5),
         .orders-table th:nth-child(6),
         .orders-table td:nth-child(6) {
-          width: 12%;
+          width: 11%;
         }
 
         .orders-table th:nth-child(7),
         .orders-table td:nth-child(7) {
-          width: 12%;
+          width: 10%;
         }
 
         .orders-table th:nth-child(8),
         .orders-table td:nth-child(8) {
-          width: 16%;
+          width: 12%;
+        }
+
+        .orders-table th:nth-child(9),
+        .orders-table td:nth-child(9) {
+          width: 6%;
+          min-width: 60px;
+          text-align: center;
+          padding-left: 0.5rem;
+          padding-right: 0.5rem;
         }
 
         .orders-table__action {
@@ -1399,6 +1473,43 @@ export default function Orders({ showToast, onLogout }) {
           align-items: center;
           gap: 8px;
           white-space: nowrap;
+        }
+
+        /* ── Status badge colours ── */
+        .orders-status-badge {
+          display: inline-flex;
+          align-items: center;
+          padding: 0.25rem 0.65rem;
+          border-radius: 999px;
+          font-size: 11.5px;
+          font-weight: 600;
+          letter-spacing: 0.03em;
+          white-space: nowrap;
+          line-height: 1;
+        }
+
+        .orders-status-badge--pending {
+          background: rgba(245, 158, 11, 0.14);
+          color: #92400e;
+          border: 1px solid rgba(245, 158, 11, 0.35);
+        }
+
+        .orders-status-badge--accepted {
+          background: rgba(37, 99, 235, 0.11);
+          color: #1d4ed8;
+          border: 1px solid rgba(37, 99, 235, 0.28);
+        }
+
+        .orders-status-badge--invoiced {
+          background: rgba(139, 92, 246, 0.12);
+          color: #6d28d9;
+          border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .orders-status-badge--dispatched {
+          background: rgba(34, 197, 94, 0.13);
+          color: #166534;
+          border: 1px solid rgba(34, 197, 94, 0.32);
         }
 
         .orders-action-select {
@@ -1678,6 +1789,46 @@ export default function Orders({ showToast, onLogout }) {
           flex-direction: column;
           gap: var(--space-5);
         }
+
+        .alert-order-btn {
+          display: inline-flex;
+          align-items: center;
+          justify-content: center;
+          width: 32px;
+          height: 32px;
+          border-radius: 50%;
+          border: none;
+          cursor: pointer;
+          padding: 0;
+          transition: transform 0.15s ease, box-shadow 0.15s ease;
+        }
+
+        .alert-order-btn svg {
+          width: 18px;
+          height: 18px;
+        }
+
+        .alert-order-btn--new {
+          background: rgba(239, 68, 68, 0.12);
+          color: #ef4444;
+          animation: alert-pulse 1.2s infinite;
+        }
+
+        .alert-order-btn--new:hover {
+          background: rgba(239, 68, 68, 0.22);
+          transform: scale(1.1);
+        }
+
+        .alert-order-btn--received {
+          background: rgba(16, 185, 129, 0.12);
+          color: #10b981;
+        }
+
+        @keyframes alert-pulse {
+          0%, 100% { box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.5); }
+          50%       { box-shadow: 0 0 0 6px rgba(239, 68, 68, 0); }
+        }
+
 
         .orders-card {
           display: flex;

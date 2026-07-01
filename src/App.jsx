@@ -17,6 +17,7 @@ const Brand              = lazy(() => import('./pages/Brand'));
 const Banner             = lazy(() => import('./pages/Banner'));
 const Banneradd          = lazy(() => import('./pages/Banneradd'));
 const Login              = lazy(() => import('./pages/Login'));
+const Area               = lazy(() => import('./pages/Area'));
 
 
 
@@ -33,6 +34,7 @@ const PAGES = {
   brands:              Brand,
   banner:              Banner,
   banneradd:           Banneradd,
+  area:                Area,
 };
 
 export default function App() {

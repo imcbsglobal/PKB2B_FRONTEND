@@ -4,7 +4,7 @@ import Badge from '../components/Badge';
 import LoadingSkeleton from '../components/LoadingSkeleton';
 import { FullPageSpinner } from '../components/Spinner';
 import { useFetchData } from '../hooks/useFetchData';
-import { orderAPI, customerAPI, productBatchAPI } from '../Services/api';
+import { orderAPI, customerAPI } from '../Services/api';
 
 const STATUS_VARIANT = {
   pending:   'warning',
@@ -25,17 +25,11 @@ export default function Dashboard() {
     () => customerAPI.getCustomers()
   );
 
-  const itemsResult = useFetchData(
-    'items',
-    () => productBatchAPI.getAllItems()
-  );
-
   // Ensure arrays, not null
   const orders = Array.isArray(ordersResult.data) ? ordersResult.data : [];
   const customers = Array.isArray(customersResult.data) ? customersResult.data : [];
-  const items = Array.isArray(itemsResult.data) ? itemsResult.data : [];
 
-  const loading = ordersResult.loading || customersResult.loading || itemsResult.loading;
+  const loading = ordersResult.loading || customersResult.loading;
 
   // ================= CALCULATE STATS =================
   const calculateStats = () => {
@@ -60,9 +54,7 @@ export default function Dashboard() {
     }, 0);
 
     // Low stock items
-    const lowStockItems = items.filter(item => 
-      item.quantity > 0 && item.quantity <= 5
-    ).length;
+    const lowStockItems = 0;
 
     return {
       ordersToday,
@@ -238,67 +230,6 @@ export default function Dashboard() {
           </div>
         </div>
 
-      </div>
-
-      {/* ── Stock details ── */}
-      <div className="dash-section">
-        <div className="dash-section__header">
-          <h2 className="dash-section__title">Stock Details (Top 10 Low Stock)</h2>
-        </div>
-        <div className="orders-card">
-          <table className="data-table">
-            <thead>
-              <tr>
-                {['CODE', 'NAME', 'BRAND', 'CATEGORY', 'PRICE', 'STOCK', 'STATUS'].map(col => (
-                  <th key={col}>{col}</th>
-                ))}
-              </tr>
-            </thead>
-            <tbody>
-              {items.length > 0 ? (
-                items
-                  .sort((a, b) => (a.quantity || 0) - (b.quantity || 0))
-                  .slice(0, 10)
-                  .map((item, idx) => {
-                    let statusColor = 'var(--color-success)';
-                    let statusText = 'In Stock';
-                    
-                    if ((item.quantity || 0) <= 0) {
-                      statusColor = 'var(--color-destructive)';
-                      statusText = 'Out of Stock';
-                    } else if ((item.quantity || 0) <= 5) {
-                      statusColor = 'var(--color-warning)';
-                      statusText = 'Low Stock';
-                    }
-                    
-                    return (
-                      <tr key={item.id || idx}>
-                        <td style={{ fontWeight: 600, fontSize: '12px' }}>{item.code || 'N/A'}</td>
-                        <td>{item.name || 'N/A'}</td>
-                        <td>{item.brand || 'N/A'}</td>
-                        <td>{item.product || 'N/A'}</td>
-                        <td style={{ textAlign: 'right' }}>₹{item.price || '0'}</td>
-                        <td style={{ fontWeight: '600', color: statusColor }}>
-                          {item.quantity || 0}
-                        </td>
-                        <td>
-                          <span style={{  color: statusColor, fontWeight: '600', fontSize: '12px' }}>
-                            {statusText}
-                          </span>
-                        </td>
-                      </tr>
-                    );
-                  })
-              ) : (
-                <tr>
-                  <td colSpan="7" style={{ textAlign: 'center', padding: '20px', color: 'var(--color-muted-fg)' }}>
-                    No items found
-                  </td>
-                </tr>
-              )}
-            </tbody>
-          </table>
-        </div>
       </div>
 
     </div>

@@ -4,7 +4,7 @@ import path from 'path'
 
 export default defineConfig({
   plugins: [react()],
-  base: './', // Use relative paths for Electron
+  base: './',
   resolve: {
     alias: { '@': path.resolve(__dirname, './src') }
   },
@@ -15,7 +15,6 @@ export default defineConfig({
         target: 'https://pkb2backend.myimc.in',
         changeOrigin: true,
         secure: false,
-        rewrite: (path) => path,
       }
     }
   },

@@ -317,6 +317,11 @@ export const productBatchAPI = {
     ),
 };
 
+// ================= AREA =================
+export const areaAPI = {
+  getAreas: () => apiClient.get('/area/'),
+};
+
 // ================= CATEGORIES =================
 export const categoryAPI = {
 
